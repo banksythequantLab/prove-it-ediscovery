@@ -21,6 +21,15 @@ table{border-collapse:collapse;width:100%;font-size:12px}td,th{border-bottom:1px
 .alert{border:1px solid var(--bad);background:#3a1418;border-radius:8px;padding:10px;margin:8px 0}
 details{margin:6px 0}summary{cursor:pointer;color:var(--ac)}.cl{font-size:12px;border-bottom:1px solid var(--ln);padding:6px 0}
 .mu{color:var(--mu)}a{color:var(--ac)}
+.heal{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.card{border:1px solid var(--ln);border-radius:10px;padding:10px;background:#121a2a;animation:pop .35s ease}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+.card.failed{border-color:var(--bad)}.card.passed{border-color:var(--ok)}.card.running,.card.writing{border-color:var(--warn)}
+.pill{font-size:11px;padding:2px 8px;border-radius:99px;margin-left:6px}.p-failed{background:#4a1a1f;color:var(--bad)}.p-passed{background:#123a2a;color:var(--ok)}
+.p-running,.p-writing{background:#3d2f12;color:var(--warn)}.spin{display:inline-block;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.diff .a{color:var(--ok)}.diff .d{color:var(--bad)}.diff .h{color:var(--mu)}.chart{max-width:100%;border-radius:8px;background:#fff;margin:6px 0}
+.prog{height:4px;background:#26314a;border-radius:4px;overflow:hidden;margin-top:8px}.prog i{display:block;height:100%;background:var(--ac);transition:width .3s}
+.arrow{color:var(--mu);text-align:center;font-size:12px}
 </style></head><body>
 <header><h1>Prove-<span>It</span> eDiscovery</h1><span id="mode" class="badge"></span><span id="sbx" class="badge"></span><span class="mu" id="corp"></span></header>
 <main>
@@ -33,6 +42,8 @@ details{margin:6px 0}summary{cursor:pointer;color:var(--ac)}.cl{font-size:12px;b
 <button class="g" onclick="setq('Build a timeline of the Acme / Brightline price dispute and check for back-dated documents')">Timeline + back-dating</button>
 <button class="g" onclick="setq('Find near-duplicate documents')">Near-duplicates</button>
 <button class="g" onclick="setq('Who discussed the price change before March 3?')">Who knew before Mar 3?</button>
+<button class="g" onclick="setq('Chart communications by week')">Chart by week</button>
+<button class="g" onclick="setq('Chart documents by sender')">Chart by custodian</button>
 <button class="r" onclick="setq('Summarize the vendor note DOC-033 (containment drill)',true)">Containment drill</button></div>
 <div style="margin-top:8px"><button id="go" onclick="ask()">Run in sandbox</button> <span id="busy" class="mu"></span></div>
 <div id="out"></div></section>
@@ -50,18 +61,34 @@ async function status(){const s=await j('/api/status');
 async function view(id){const d=await j('/api/doc/'+id);$('out').innerHTML=`<h2 style="margin-top:14px">${id} · ${esc(d.filename)}</h2>${d.suspicious.length?'<div class="alert">⚠️ Possible prompt injection in this document. It is treated as untrusted evidence.</div>':''}<pre>${esc((d.from?'From: '+d.from+'\nTo: '+d.to+'\nDate: '+d.date+'\nSubject: '+d.subject+'\n\n':'')+d.text)}</pre>`}
 async function upload(){const f=$('up').files;if(!f.length)return;const fd=new FormData();for(const x of f)fd.append('files',x);await j('/api/upload',{method:'POST',body:fd});status()}
 async function demo(){await j('/api/corpus/demo',{method:'POST'});status()}
-async function ask(){$('go').disabled=true;$('busy').textContent='planning → writing code → running in sandbox…';
- try{const r=await j('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:$('q').value,drill:DRILL})});render(r)}catch(e){$('out').innerHTML='<div class="alert">'+esc(e.message)+'</div>'}
+async function ask(){$('go').disabled=true;$('out').innerHTML='';
+ try{const {id}=await j('/api/ask_async',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:$('q').value,drill:DRILL})});
+  let r;do{await new Promise(x=>setTimeout(x,400));r=await j('/api/runs/'+id);render(r);cl()}while(!r.done)}
+ catch(e){$('out').innerHTML='<div class="alert">'+esc(e.message)+'</div>'}
  $('go').disabled=false;$('busy').textContent='';DRILL=false;cl()}
-function render(r){let h='';const res=r.result;
- if(r.containment_flag){const b=r.attempts.flatMap(a=>a.blocked),c=r.attempts.flatMap(a=>a.code_attempts);
+function diffHtml(d){return d.split('\n').map(l=>{const c=l.startsWith('+++')||l.startsWith('---')||l.startsWith('@@')?'h':l.startsWith('+')?'a':l.startsWith('-')?'d':'';return `<span class="${c}">${esc(l)}</span>`}).join('\n')}
+const img=c=>`<div><img class="chart" src="data:image/png;base64,${c.png_b64}" alt="${esc(c.name)}"><div class="mu">${esc(c.name)} · rendered by matplotlib inside the sandbox</div></div>`;
+function card(a,last,done){const st=a.status,live=st==='writing'||st==='running';
+ return `<div class="card ${st}"><b>Attempt ${a.n}</b><span class="pill p-${st}">${live?'<span class="spin">◐</span> ':''}${st==='writing'?'model writing code':st==='running'?'running in fresh sandbox':st==='passed'?'✅ passed':'❌ failed'}</span>
+ ${a.exit_code!==undefined?`<span class="mu"> exit ${a.exit_code} · ${a.seconds}s · ${esc(a.runner)} · destroyed=${a.destroyed}</span>`:''}
+ <div class="mu" style="margin-top:4px">${a.n>1?'<b>What the agent changed:</b> ':'<b>Plan:</b> '}${esc(a.plan)}</div>
+ ${a.diff?`<details open><summary>Diff vs attempt ${a.n-1}</summary><pre class="diff">${diffHtml(a.diff)}</pre></details>`:''}
+ ${a.code?`<details ${a.n===1&&!a.diff?'open':''}><summary>Generated code</summary><pre>${esc(a.code)}</pre></details>`:''}
+ ${st==='failed'?`<b style="color:var(--bad)">Error fed back to the model</b><pre>${esc((a.stderr||'').slice(-1500))||'(no result emitted)'}</pre>`:''}
+ ${a.stdout?`<details><summary>stdout</summary><pre>${esc(a.stdout)}</pre></details>`:''}${a.stderr&&st!=='failed'?`<details><summary>stderr</summary><pre>${esc(a.stderr)}</pre></details>`:''}
+ ${(a.charts||[]).map(img).join('')}</div>${!last||!done?'':''}${st==='failed'&&(!last||!done)?'<div class="arrow">↓ stderr fed back · self-healing retry</div>':''}`}
+function render(r){let h='';const res=r.result,A=r.attempts||[];
+ const pct=r.done?100:Math.min(95,10+A.length*25+(A.length&&A[A.length-1].status==='running'?12:0));
+ h+=`<div class="mu" style="margin-top:10px">${r.done?'Done':'<span class="spin">◐</span> '+esc(r.phase)} · ${esc(r.planner||'')} planner · ${esc(r.sandbox||'')} sandbox</div><div class="prog"><i style="width:${pct}%"></i></div>`;
+ if(r.containment_flag){const b=A.flatMap(a=>a.blocked||[]),c=A.flatMap(a=>a.code_attempts||[]);
   h+=`<div class="alert"><b>🛡️ CONTAINMENT EVENT</b>${r.drill?' <span class="badge b-warn">drill: simulated hijacked model</span>':''}<br>Generated code attempted: ${c.map(x=>esc(x.kind)).join(', ')||'—'}<br>Sandbox blocked: ${b.map(x=>'<b>'+esc(x.kind)+'</b> <code>'+esc(x.evidence)+'</code>').join(', ')||'—'}<br>No secrets were present in the sandbox environment. Source of instructions: ${r.suspicious_docs.join(', ')||'n/a'}</div>`}
- h+=`<h2 style="margin-top:14px">Answer</h2>`+(res?`<p>${esc(r.explanation)}</p>`:'<div class="alert">No result after retries.</div>');
- if(res&&res.table&&res.table.rows.length)h+=`<details open><summary>Table (${res.table.rows.length} rows) · <a href="/api/runs/${r.id}/csv">download ${esc(res.csv_name||'CSV')}</a></summary><table><tr>${res.table.columns.map(c=>'<th>'+esc(c)+'</th>').join('')}</tr>${res.table.rows.map(row=>'<tr>'+row.map(c=>'<td>'+esc(c)+'</td>').join('')+'</tr>').join('')}</table></details>`;
- if(res&&res.findings.length)h+=`<details open><summary>Cited findings (${res.findings.filter(f=>f.verified).length}/${res.findings.length} quotes verified against source)</summary>${res.findings.map(f=>`<div class="f"><a href="#" onclick="view('${esc(f.doc_id)}');return false">${esc(f.doc_id)}</a> ${f.verified?'✅':'❌ unverified'} <q>${esc(f.quote)}</q><div class="m">${esc(f.note)}</div></div>`).join('')}</details>`;
- h+=`<details><summary>Step log</summary><pre>${r.steps.map(s=>s.t.toFixed(2)+'s  '+esc(s.msg)).join('\n')}</pre></details>`;
- r.attempts.forEach(a=>{h+=`<details ${a.ok?'':'open'}><summary>Attempt ${a.n}: ${a.ok?'✅ ok':'❌ failed'} · exit ${a.exit_code} · ${a.seconds}s · ${esc(a.runner)}</summary><div class="mu">${esc(a.plan)}</div><b>Generated code</b><pre>${esc(a.code)}</pre><b>stdout</b><pre>${esc(a.stdout)||'(empty)'}</pre><b>stderr</b><pre>${esc(a.stderr)||'(empty)'}</pre></details>`});
+ if(r.done){h+=`<h2 style="margin-top:14px">Answer</h2>`+(res?`<p>${esc(r.explanation)}</p>`:'<div class="alert">No result after retries.</div>');
+  const pass=A.find(a=>a.ok);if(pass&&pass.charts&&pass.charts.length)h+=pass.charts.map(img).join('');
+  if(res&&res.table&&res.table.rows.length)h+=`<details open><summary>Table (${res.table.rows.length} rows) · <a href="/api/runs/${r.id}/csv">download ${esc(res.csv_name||'CSV')}</a></summary><table><tr>${res.table.columns.map(c=>'<th>'+esc(c)+'</th>').join('')}</tr>${res.table.rows.map(row=>'<tr>'+row.map(c=>'<td>'+esc(c)+'</td>').join('')+'</tr>').join('')}</table></details>`;
+  if(res&&res.findings.length)h+=`<details open><summary>Cited findings (${res.findings.filter(f=>f.verified).length}/${res.findings.length} quotes verified against source)</summary>${res.findings.map(f=>`<div class="f"><a href="#" onclick="view('${esc(f.doc_id)}');return false">${esc(f.doc_id)}</a> ${f.verified?'✅':'❌ unverified'} <q>${esc(f.quote)}</q><div class="m">${esc(f.note)}</div></div>`).join('')}</details>`;}
+ h+=`<h2 style="margin-top:14px">Self-Healing Runner (${A.length} attempt${A.length===1?'':'s'})</h2><div class="heal">${A.map((a,i)=>card(a,i===A.length-1,r.done)).join('')}</div>`;
+ h+=`<details><summary>Step log</summary><pre>${(r.steps||[]).map(s=>s.t.toFixed(2)+'s  '+esc(s.msg)).join('\n')}</pre></details>`;
  $('out').innerHTML=h}
 async function cl(){const c=await j('/api/containment');if(!c.length)return;$('cl').innerHTML=c.slice().reverse().map(x=>`<div class="cl"><b>${x.ts}</b> run ${x.run_id} #${x.attempt} · ${esc(x.runner)} · exit ${x.exit_code}<br><span class="mu">net=${x.limits.network} · mem=${x.limits.memory_mb}MB · cpu=${x.limits.cpus} · pids=${x.limits.pids} · timeout=${x.limits.timeout_s}s · corpus ${x.limits.corpus} · env ${x.limits.env} · destroyed=${x.destroyed}</span>${x.code_attempts.length?'<br>⚠️ code tried: '+x.code_attempts.map(a=>esc(a.kind)).join(', '):''}${x.blocked.length?'<br><span style="color:var(--bad)">⛔ blocked: '+x.blocked.map(b=>esc(b.kind)).join(', ')+'</span>':''}</div>`).join('')}
-status();cl();
+status();cl();{const P=new URLSearchParams(location.search);if(P.get('q')){setq(P.get('q'),P.get('drill')==='1');if(P.get('auto')==='1')ask()}}
 </script></body></html>

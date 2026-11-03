@@ -79,3 +79,13 @@ Note: the app container mounts `/var/run/docker.sock` so it can start sandbox co
 - An LLM may refuse to follow the injection. That's why the drill exists: it shows the sandbox holds even when the model doesn't.
 
 MIT licensed.
+
+## Self-Healing Runner & charts
+
+- **Self-Healing Runner**: each attempt is shown as a card (status, plan, generated code, the stderr fed back to the model, and a diff against the previous attempt), and the cards update live while the run is in progress. The UI uses `POST /api/ask_async` and polls `GET /api/runs/{id}`. `POST /api/ask` stays synchronous.
+- **Charts**: sandbox code calls `pi.save_chart(fig, "name.png")`. matplotlib runs inside the sandbox with the Agg backend and no network. The host collects at most 6 PNGs (2 MB each) from the run's `out/` dir and shows them inline.
+- Local sandbox deps: `.venv/bin/pip install --target sandbox_env/site matplotlib` (this is mounted read-only into the sandbox). The Docker image installs matplotlib in `sandbox/Dockerfile`; that image has not been built or tested yet.
+- `SCRIPTED_PACING_S` (default 0.8) is a delay added only in scripted mode so the cards can be watched. Set it to 0 to turn it off.
+- In scripted mode, the bugs on the first attempt are **planted** (a strptime format bug on the timeline route and a missing chart name on the chart route). They show the retry loop; nothing is being fixed by a real model in this mode.
+- `scripts/smoke_test.sh` checks 7 flows and saves the charts to `shots/sample_*.png`. `scripts/shoot_ui.py` (playwright) saves the UI screenshots to `shots/ui_*.png`.
+- `/?q=...&auto=1` pre-fills a question and runs it automatically.

@@ -3,6 +3,8 @@ fallback for hosts without Docker: Linux user+net+mount+pid namespaces, rlimits,
 import os, pathlib, re, shutil, subprocess, tempfile, time, uuid
 HERE = pathlib.Path(__file__).resolve().parent.parent
 PI = HERE / "sandbox" / "pi.py"
+BOOT = HERE / "sandbox" / "_boot.py"
+SITE = pathlib.Path(os.getenv("SANDBOX_SITE", HERE / "sandbox_env" / "site"))
 LIMITS = {"timeout_s": int(os.getenv("SANDBOX_TIMEOUT", 20)), "memory_mb": int(os.getenv("SANDBOX_MEMORY_MB", 512)),
           "cpus": float(os.getenv("SANDBOX_CPUS", 1)), "pids": 64, "network": "none", "corpus": "read-only", "env": "empty (no secrets)"}
 BLOCK_SIGNS = [("network", r"Network is unreachable|Temporary failure in name resolution|Name or service not known|nodename nor servname|Errno -[23]|Errno 101"),
@@ -20,8 +22,9 @@ def docker_available():
 class Run(dict): pass
 def _prepare(code, corpus_dir):
     work = pathlib.Path(tempfile.mkdtemp(prefix="pi-sbx-"))
-    shutil.copytree(corpus_dir, work/"corpus"); shutil.copy(PI, work/"pi.py"); (work/"main.py").write_text(code)
-    for p in [work/"corpus", *(work/"corpus").rglob("*"), work/"pi.py", work/"main.py"]:
+    shutil.copytree(corpus_dir, work/"corpus"); shutil.copy(PI, work/"pi.py"); shutil.copy(BOOT, work/"_boot.py"); (work/"main.py").write_text(code)
+    (work/"out").mkdir(); (work/"_site").mkdir(); os.chmod(work/"out", 0o777)
+    for p in [work/"corpus", *(work/"corpus").rglob("*"), work/"pi.py", work/"main.py", work/"_boot.py"]:
         os.chmod(p, 0o555 if p.is_dir() else 0o444)
     os.chmod(work, 0o777)
     return work
@@ -39,18 +42,22 @@ class DockerSandbox:
                "--memory",f"{LIMITS['memory_mb']}m","--memory-swap",f"{LIMITS['memory_mb']}m","--cpus",str(LIMITS['cpus']),
                "--pids-limit",str(LIMITS['pids']),"--cap-drop","ALL","--security-opt","no-new-privileges","--user","10001:10001",
                "--env-file","/dev/null","-v",f"{work}/corpus:/work/corpus:ro","-v",f"{work}/pi.py:/work/pi.py:ro",
-               "-v",f"{work}/main.py:/work/main.py:ro",self.image]
-        return _exec(cmd, code, work, {"runner": "docker", "container": cid, "command": " ".join(cmd)},
+               "-v",f"{work}/main.py:/work/main.py:ro","-v",f"{work}/_boot.py:/work/_boot.py:ro",
+               "-v",f"{work}/out:/work/out:rw",self.image]
+        return _exec(cmd, code, work, {"runner": "docker", "out_dir": work/"out", "container": cid, "command": " ".join(cmd)},
                      on_timeout=lambda: subprocess.run(["docker","rm","-f",cid],capture_output=True))
 class LocalNamespaceSandbox:
     name = "local-namespace"
     def run(self, code, corpus_dir):
         work = _prepare(code, corpus_dir); mem = LIMITS["memory_mb"]*1024*1024
+        outh = pathlib.Path(tempfile.mkdtemp(prefix="pi-out-")); os.chmod(outh, 0o777); self._outh = outh
         inner = (f"mount --bind {work} {work} && mount -o remount,ro,bind {work} {work} && "
+                 f"mount --bind {outh} {work}/out && "
+                 + (f"mount --bind {SITE} {work}/_site && mount -o remount,ro,bind {work}/_site {work}/_site && " if SITE.exists() else "") +
                  "for d in /home /workspace /root /etc/ssh; do [ -d $d ] && mount -t tmpfs -o ro,size=1k none $d 2>/dev/null; done; "
-                 f"cd {work} && exec prlimit --as={mem} --cpu={LIMITS['timeout_s']} --fsize=10485760 --nofile=64 /usr/bin/python3 -E -s main.py")
+                 f"cd {work} && exec prlimit --as={mem} --cpu={LIMITS['timeout_s']} --fsize=10485760 --nofile=64 /usr/bin/python3 -E -s _boot.py")
         cmd = ["env","-i","PATH=/usr/bin:/bin","HOME=/tmp","LANG=C.UTF-8","unshare","-r","-n","-m","-p","--fork","--mount-proc","sh","-c",inner]
-        return _exec(cmd, code, work, {"runner": "local-namespace", "container": None, "command": "env -i … unshare -rnmp --fork … prlimit … python3 -E -s main.py", "limit_overrides": {"pids": "not enforced (local)", "cpus": "cpu-time rlimit only"}})
+        return _exec(cmd, code, work, {"runner": "local-namespace", "out_dir": outh, "container": None, "command": "env -i … unshare -rnmp --fork … prlimit … python3 -E -s main.py", "limit_overrides": {"pids": "not enforced (local)", "cpus": "cpu-time rlimit only"}})
 def _exec(cmd, code, work, meta, on_timeout=None):
     t0 = time.time(); timed_out = False
     try:
@@ -60,10 +67,19 @@ def _exec(cmd, code, work, meta, on_timeout=None):
         timed_out = True; rc = -9; out = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""); err = "TIMEOUT"
         if on_timeout: on_timeout()
     finally:
+        charts = _collect(meta.pop("out_dir", None))
         subprocess.run(["chmod","-R","u+w",str(work)]); shutil.rmtree(work, ignore_errors=True)
     if rc in (-9, 137, -24, 152) and time.time()-t0 >= LIMITS['timeout_s']-1: timed_out = True
     blocked, attempts = _analyze(code, out, err, rc, timed_out)
     return Run(meta, exit_code=rc, stdout=out[-20000:], stderr=err[-20000:], seconds=round(time.time()-t0,2), limits={**LIMITS, **meta.pop("limit_overrides", {})},
-               blocked=blocked, code_attempts=attempts, destroyed=not pathlib.Path(work).exists())
+               blocked=blocked, code_attempts=attempts, charts=charts, destroyed=not pathlib.Path(work).exists())
+def _collect(d, max_n=6, max_bytes=2_000_000):
+    import base64; out = []
+    if not d or not pathlib.Path(d).exists(): return out
+    for p in sorted(pathlib.Path(d).glob("*.png"))[:max_n]:
+        b = p.read_bytes()
+        if len(b) <= max_bytes and b[:8] == b"\x89PNG\r\n\x1a\n": out.append({"name": p.name, "png_b64": base64.b64encode(b).decode()})
+    if str(d).startswith(tempfile.gettempdir()) and "pi-out-" in str(d): shutil.rmtree(d, ignore_errors=True)
+    return out
 def get_sandbox():
     return DockerSandbox() if docker_available() else LocalNamespaceSandbox()
