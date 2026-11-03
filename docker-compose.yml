@@ -1,39 +1,52 @@
 services:
-  sandbox-image:            # builds the sandbox image only; exits immediately
-    build: ./sandbox
-    image: prove-it-sandbox:latest
+  parser-image:             # builds the per-file sandbox image only; exits immediately
+    build: ./parser
+    image: prove-it-parser:latest
     entrypoint: ["true"]
-  app:
+    network_mode: none
+  app:                      # internet-facing orchestrator: holds the inference key, NOT the docker socket
     build: .
     restart: unless-stopped
+    env_file: .env          # root-owned 0600 on the VM; only this container gets it
     environment:
-      - VULTR_INFERENCE_API_KEY=${VULTR_INFERENCE_API_KEY}
-      - VULTR_MODEL=${VULTR_MODEL:-glm-5.3-flash}
-      - TMPDIR=/var/lib/prove-it/sbx      # same path on host + container so sandbox bind mounts resolve
       - SANDBOX_RUNNER_URL=http://runner:9000
+      - PI_ROOT=/var/lib/prove-it
     volumes:
-      - /var/lib/prove-it/sbx:/var/lib/prove-it/sbx   # job dirs only; NO docker socket in the internet-facing app
-    expose: ["8000"]
-    networks: [web, internal]
-    depends_on: [runner]
-  runner:                   # only service with the docker socket; internal network, no published port, no secrets
+      - /var/lib/prove-it:/var/lib/prove-it
+    expose:
+      - "8000"
+    networks:
+      - web
+      - internal
+    depends_on:
+      - runner
+  runner:                   # only holder of the docker socket; internal network, no published port, no secrets
     build: ./runner
     restart: unless-stopped
+    environment:
+      - PI_ROOT=/var/lib/prove-it
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /var/lib/prove-it/sbx:/var/lib/prove-it/sbx
-    networks: [internal]
+      - /var/lib/prove-it/evidence:/var/lib/prove-it/evidence:ro
+      - /var/lib/prove-it/jobs:/var/lib/prove-it/jobs
+    networks:
+      - internal
   caddy:
     image: caddy:2
     restart: unless-stopped
-    ports: ["80:80", "443:443"]
+    ports:
+      - "80:80"
+      - "443:443"
     environment:
       - "DOMAIN=${DOMAIN:-:80}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
-    networks: [web]
-volumes: { caddy_data: {} }
+    networks:
+      - web
+volumes:
+  caddy_data: {}
 networks:
   web: {}
-  internal: { internal: true }
+  internal:
+    internal: true

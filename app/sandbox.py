@@ -1,114 +1,49 @@
-"""Sandbox runners. DockerSandbox is the production path (Vultr VM). LocalNamespaceSandbox is a
-fallback for hosts without Docker: Linux user+net+mount+pid namespaces, rlimits, empty env."""
-import os, pathlib, re, shutil, subprocess, tempfile, time, uuid
-HERE = pathlib.Path(__file__).resolve().parent.parent
-PI = HERE / "sandbox" / "pi.py"
-BOOT = HERE / "sandbox" / "_boot.py"
-SITE = pathlib.Path(os.getenv("SANDBOX_SITE", HERE / "sandbox_env" / "site"))
-LIMITS = {"timeout_s": int(os.getenv("SANDBOX_TIMEOUT", 20)), "memory_mb": int(os.getenv("SANDBOX_MEMORY_MB", 512)),
-          "cpus": float(os.getenv("SANDBOX_CPUS", 1)), "pids": 64, "network": "none", "corpus": "read-only", "env": "empty (no secrets)"}
-BLOCK_SIGNS = [("network", r"Network is unreachable|Temporary failure in name resolution|Name or service not known|nodename nor servname|Errno -[23]|Errno 101"),
-               ("filesystem-write", r"Read-only file system|Errno 30"),
-               ("permission", r"Permission denied|Operation not permitted"),
-               ("memory", r"MemoryError|Cannot allocate memory"),
-               ("process-limit", r"Resource temporarily unavailable|Errno 11"),]
-CODE_SIGNS = [("network attempt", r"\burllib|\brequests\b|\bsocket\b|http\.client|httpx"),
-              ("env/secret read", r"os\.environ|getenv|/proc/self/environ"),
-              ("file deletion/write to corpus", r"os\.remove|unlink|shutil\.rmtree|open\([^)]*corpus[^)]*['\"][wa]"),
-              ("subprocess spawn", r"\bsubprocess\b|os\.system|os\.popen")]
-def docker_available():
-    if os.getenv("SANDBOX_MODE") == "local": return False
-    try: return subprocess.run(["docker","info"],capture_output=True,timeout=8).returncode == 0
-    except Exception: return False
-class Run(dict): pass
-def _prepare(code, corpus_dir):
-    work = pathlib.Path(tempfile.mkdtemp(prefix="pi-sbx-"))
-    shutil.copytree(corpus_dir, work/"corpus"); shutil.copy(PI, work/"pi.py"); shutil.copy(BOOT, work/"_boot.py"); (work/"main.py").write_text(code)
-    (work/"out").mkdir(); (work/"_site").mkdir(); os.chmod(work/"out", 0o777)
-    for p in [work/"corpus", *(work/"corpus").rglob("*"), work/"pi.py", work/"main.py", work/"_boot.py"]:
-        os.chmod(p, 0o555 if p.is_dir() else 0o444)
-    os.chmod(work, 0o777)
-    return work
-def _analyze(code, out, err, rc, timed_out):
-    blocked = [{"kind": k, "evidence": re.search(rx, out+err).group(0)} for k, rx in BLOCK_SIGNS if re.search(rx, out+err)]
-    if rc in (137, -9) and not timed_out and not any(b["kind"] == "memory" for b in blocked):
-        blocked.append({"kind": "memory", "evidence": f"OOM-killed at {LIMITS['memory_mb']}MB cap (exit {rc})"})
-    if timed_out: blocked.append({"kind": "timeout", "evidence": f"killed after {LIMITS['timeout_s']}s"})
-    attempts = [{"kind": k, "evidence": re.search(rx, code).group(0)} for k, rx in CODE_SIGNS if re.search(rx, code)]
-    return blocked, attempts
-class DockerSandbox:
-    name = "docker"
-    image = os.getenv("SANDBOX_IMAGE", "prove-it-sandbox:latest")
-    def run(self, code, corpus_dir):
-        work = _prepare(code, corpus_dir); cid = "pi-" + uuid.uuid4().hex[:10]
-        cmd = ["docker","run","--rm","--name",cid,"--network","none","--read-only","--tmpfs","/tmp:rw,size=64m,noexec",
-               "--memory",f"{LIMITS['memory_mb']}m","--memory-swap",f"{LIMITS['memory_mb']}m","--cpus",str(LIMITS['cpus']),
-               "--pids-limit",str(LIMITS['pids']),"--cap-drop","ALL","--security-opt","no-new-privileges","--user","10001:10001",
-               "--env-file","/dev/null","-v",f"{work}/corpus:/work/corpus:ro","-v",f"{work}/pi.py:/work/pi.py:ro",
-               "-v",f"{work}/main.py:/work/main.py:ro","-v",f"{work}/_boot.py:/work/_boot.py:ro",
-               "-v",f"{work}/out:/work/out:rw",self.image]
-        return _exec(cmd, code, work, {"runner": "docker", "out_dir": work/"out", "container": cid, "command": " ".join(cmd)},
-                     on_timeout=lambda: subprocess.run(["docker","rm","-f",cid],capture_output=True))
-class LocalNamespaceSandbox:
-    name = "local-namespace"
-    def run(self, code, corpus_dir):
-        work = _prepare(code, corpus_dir); mem = LIMITS["memory_mb"]*1024*1024
-        outh = pathlib.Path(tempfile.mkdtemp(prefix="pi-out-")); os.chmod(outh, 0o777); self._outh = outh
-        inner = (f"mount --bind {work} {work} && mount -o remount,ro,bind {work} {work} && "
-                 f"mount --bind {outh} {work}/out && "
-                 + (f"mount --bind {SITE} {work}/_site && mount -o remount,ro,bind {work}/_site {work}/_site && " if SITE.exists() else "") +
-                 "for d in /home /workspace /root /etc/ssh; do [ -d $d ] && mount -t tmpfs -o ro,size=1k none $d 2>/dev/null; done; "
-                 f"cd {work} && exec prlimit --as={mem} --cpu={LIMITS['timeout_s']} --fsize=10485760 --nofile=64 /usr/bin/python3 -E -s _boot.py")
-        cmd = ["env","-i","PATH=/usr/bin:/bin","HOME=/tmp","LANG=C.UTF-8","unshare","-r","-n","-m","-p","--fork","--mount-proc","sh","-c",inner]
-        return _exec(cmd, code, work, {"runner": "local-namespace", "out_dir": outh, "container": None, "command": "env -i … unshare -rnmp --fork … prlimit … python3 -E -s _boot.py (runs main.py)", "limit_overrides": {"pids": "not enforced (local)", "cpus": "cpu-time rlimit only"}})
-def _exec(cmd, code, work, meta, on_timeout=None):
-    t0 = time.time(); timed_out = False
-    try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=LIMITS["timeout_s"]+5, env={"PATH": "/usr/bin:/bin"})
-        out, err, rc = p.stdout, p.stderr, p.returncode
-    except subprocess.TimeoutExpired as e:
-        timed_out = True; rc = -9; out = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""); err = "TIMEOUT"
-        if on_timeout: on_timeout()
-    finally:
-        charts = _collect(meta.pop("out_dir", None))
-        subprocess.run(["chmod","-R","u+w",str(work)]); shutil.rmtree(work, ignore_errors=True)
-    if rc in (-9, 137, -24, 152) and time.time()-t0 >= LIMITS['timeout_s']-1: timed_out = True
-    blocked, attempts = _analyze(code, out, err, rc, timed_out)
-    return Run(meta, exit_code=rc, stdout=out[-20000:], stderr=err[-20000:], seconds=round(time.time()-t0,2), limits={**LIMITS, **meta.pop("limit_overrides", {})},
-               blocked=blocked, code_attempts=attempts, charts=charts, destroyed=not pathlib.Path(work).exists())
-def _collect(d, max_n=6, max_bytes=2_000_000):
-    import base64; out = []
-    if not d or not pathlib.Path(d).exists(): return out
-    for p in sorted(pathlib.Path(d).glob("*.png"))[:max_n]:
-        b = p.read_bytes()
-        if len(b) <= max_bytes and b[:8] == b"\x89PNG\r\n\x1a\n": out.append({"name": p.name, "png_b64": base64.b64encode(b).decode()})
-    if str(d).startswith(tempfile.gettempdir()) and "pi-out-" in str(d): shutil.rmtree(d, ignore_errors=True)
-    return out
-class RunnerSandbox:
-    """Production path: asks the separate sandbox-runner service (which alone holds the Docker socket) to run a job.
-    The app sends only the job directory name; the runner fixes every isolation flag."""
-    name = "docker"
-    url = os.getenv("SANDBOX_RUNNER_URL", "")
-    def run(self, code, corpus_dir):
-        import json, urllib.request
-        work = _prepare(code, corpus_dir); t0 = time.time()
+"""How the app gets a file parsed. Production: ask the isolated sandbox-runner (the only holder of the Docker socket).
+Dev/tests without Docker: a local namespace sandbox (unshare -rn + prlimit + timeout), clearly labelled as such."""
+import json, os, pathlib, shutil, subprocess, time, uuid, urllib.request
+from .db import ROOT
+EVID, JOBS = ROOT / "evidence", ROOT / "jobs"
+RUNNER = os.getenv("SANDBOX_RUNNER_URL", "")
+LIMITS = {"network": "none", "evidence": "read-only bind mount", "scratch": "per-job /out only", "memory_mb": 512, "cpus": 1,
+          "pids": 64, "timeout_s": int(os.getenv("PARSE_TIMEOUT", 20)), "user": "uid 10001 (non-root)", "capabilities": "none (cap-drop ALL)",
+          "env": "empty (no secrets)", "lifetime": "destroyed after each file (--rm)"}
+PARSER = pathlib.Path(__file__).resolve().parent.parent / "parser" / "parse.py"
+def mode():
+    if RUNNER:
         try:
-            req = urllib.request.Request(self.url.rstrip("/") + "/run", data=json.dumps({"job": work.name}).encode(),
-                                         headers={"content-type": "application/json"})
-            r = json.load(urllib.request.urlopen(req, timeout=LIMITS["timeout_s"] + 30))
-            out, err, rc, timed_out = r["stdout"], r["stderr"], r["exit_code"], r["timed_out"]
-            meta = {"runner": "docker (via sandbox-runner)", "container": r["container"], "command": r["command"]}
-        finally:
-            charts = _collect(work/"out")
-            subprocess.run(["chmod","-R","u+w",str(work)]); shutil.rmtree(work, ignore_errors=True)
-        blocked, attempts = _analyze(code, out, err, rc, timed_out)
-        return Run(meta, exit_code=rc, stdout=out, stderr=err, seconds=round(time.time()-t0,2), limits=LIMITS,
-                   blocked=blocked, code_attempts=attempts, charts=charts, destroyed=not work.exists())
-def runner_available():
-    if not RunnerSandbox.url: return False
+            with urllib.request.urlopen(RUNNER.rstrip("/") + "/health", timeout=3) as r: return "docker-runner" if r.status == 200 else "unavailable"
+        except Exception: return "unavailable"
+    return "local-namespace (dev only)"
+def parse(sha, hint):
+    """Returns (runner_info, result_dict_or_None, children[list of (name, bytes)])."""
+    job = "pi-job-" + uuid.uuid4().hex[:12]; out = JOBS / job / "out"; out.mkdir(parents=True); os.chmod(out, 0o777)
+    t0 = time.time()
     try:
-        import urllib.request; return urllib.request.urlopen(RunnerSandbox.url.rstrip("/") + "/health", timeout=3).status == 200
-    except Exception: return False
-def get_sandbox():
-    if runner_available(): return RunnerSandbox()
-    return DockerSandbox() if docker_available() else LocalNamespaceSandbox()
+        info = _runner(sha, job, hint) if RUNNER else _local(sha, out, hint)
+        info["seconds"] = round(time.time() - t0, 2)
+        res = None; rp = out / "result.json"
+        if rp.is_file() and rp.stat().st_size < 20_000_000:
+            try: res = json.loads(rp.read_text())
+            except Exception: res = None
+        kids = []
+        if res and not info.get("out_capped"):
+            for c in res.get("children", []):
+                p = (out / c["path"]).resolve()
+                if p.parent == (out / "children").resolve() and p.is_file() and not p.is_symlink(): kids.append((c["name"], p.read_bytes()))
+        return info, res, kids
+    finally:
+        shutil.rmtree(JOBS / job, ignore_errors=True)
+def _runner(sha, job, hint):
+    req = urllib.request.Request(RUNNER.rstrip("/") + "/parse", data=json.dumps({"sha": sha, "job": job, "hint": hint}).encode(),
+                                 headers={"content-type": "application/json"})
+    with urllib.request.urlopen(req, timeout=LIMITS["timeout_s"] + 40) as r: return json.load(r)
+def _local(sha, out, hint):
+    mem = 512 * 1024 * 1024; ev = EVID / sha
+    cmd = ["env", "-i", "PATH=/usr/bin:/bin", f"PI_IN={ev}", f"PI_OUT={out}", "unshare", "-rn", "prlimit", f"--as={mem * 2}",
+           f"--cpu={LIMITS['timeout_s']}", "--nofile=256", os.getenv("PARSER_PYTHON", shutil.which("python3")), str(PARSER), hint]
+    info = {"container": None, "runner": "local-namespace", "timed_out": False, "destroyed": True}
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=LIMITS["timeout_s"])
+        info.update(exit_code=p.returncode, stderr=p.stderr[-4000:])
+    except subprocess.TimeoutExpired: info.update(exit_code=-9, timed_out=True, stderr="killed: time limit")
+    return info

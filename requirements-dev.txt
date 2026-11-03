@@ -1,0 +1,6 @@
+pytest
+pypdf
+python-docx
+openpyxl
+beautifulsoup4
+extract-msg

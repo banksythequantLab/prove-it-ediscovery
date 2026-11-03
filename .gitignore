@@ -6,3 +6,5 @@ sandbox_env/
 *.pem
 id_*
 .env.*
+.pytest_cache/
+demo_out/

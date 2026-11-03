@@ -1,94 +1,154 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Prove-It eDiscovery</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prove-It eDiscovery · First-pass review</title>
 <style>
-:root{--bg:#0f1420;--pn:#171e2e;--ln:#2a3550;--tx:#e6ebf5;--mu:#8d9ab5;--ac:#5b9cff;--ok:#3ecf8e;--bad:#ff5d5d;--warn:#ffb547}
-*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
-header{display:flex;gap:16px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--ln)}
-h1{font-size:18px;margin:0}h1 span{color:var(--ac)}.badge{padding:3px 8px;border-radius:99px;font-size:12px;border:1px solid var(--ln)}
-.b-warn{color:var(--warn);border-color:var(--warn)}.b-ok{color:var(--ok);border-color:var(--ok)}.b-bad{color:var(--bad);border-color:var(--bad)}
-main{display:grid;grid-template-columns:270px 1fr 340px;gap:12px;padding:12px;height:calc(100vh - 56px)}
-.pn{background:var(--pn);border:1px solid var(--ln);border-radius:10px;padding:12px;overflow:auto}
-h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);margin:0 0 8px}
-.doc b{white-space:nowrap}.doc{padding:4px 6px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;justify-content:space-between;gap:6px}.doc:hover{background:#222b40}
-.doc .s{color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-textarea{width:100%;background:#0b101a;color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:8px;font:inherit}
-button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:600}
-button.g{background:#26314a}button.r{background:#a8323a}button:disabled{opacity:.5}
-.chips button{margin:3px 3px 0 0;font-size:12px;font-weight:500}
-pre{background:#0b101a;border:1px solid var(--ln);border-radius:8px;padding:8px;overflow:auto;max-height:320px;font-size:12px;white-space:pre-wrap}
-table{border-collapse:collapse;width:100%;font-size:12px}td,th{border-bottom:1px solid var(--ln);padding:4px 6px;text-align:left;vertical-align:top}
-.f{border-left:3px solid var(--ac);padding:4px 8px;margin:6px 0;background:#121a2a}.f q{color:#cfe0ff}.f .m{color:var(--mu);font-size:12px}
-.alert{border:1px solid var(--bad);background:#3a1418;border-radius:8px;padding:10px;margin:8px 0}
-details{margin:6px 0}summary{cursor:pointer;color:var(--ac)}.cl{font-size:12px;border-bottom:1px solid var(--ln);padding:6px 0}
-.mu{color:var(--mu)}a{color:var(--ac)}
-.heal{display:flex;flex-direction:column;gap:10px;margin-top:10px}
-.card{border:1px solid var(--ln);border-radius:10px;padding:10px;background:#121a2a;animation:pop .35s ease}
-@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
-.card.failed{border-color:var(--bad)}.card.passed{border-color:var(--ok)}.card.running,.card.writing{border-color:var(--warn)}
-.pill{font-size:11px;padding:2px 8px;border-radius:99px;margin-left:6px}.p-failed{background:#4a1a1f;color:var(--bad)}.p-passed{background:#123a2a;color:var(--ok)}
-.p-running,.p-writing{background:#3d2f12;color:var(--warn)}.spin{display:inline-block;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
-.diff .a{color:var(--ok)}.diff .d{color:var(--bad)}.diff .h{color:var(--mu)}.chart{max-width:100%;border-radius:8px;background:#fff;margin:6px 0}
-.prog{height:4px;background:#26314a;border-radius:4px;overflow:hidden;margin-top:8px}.prog i{display:block;height:100%;background:var(--ac);transition:width .3s}
-.arrow{color:var(--mu);text-align:center;font-size:12px}
+:root{--bg:#f4f6f9;--pane:#fff;--ink:#1c2430;--mut:#667085;--line:#e3e7ee;--brand:#1f4e8c;--brand2:#e8effa;--ok:#137a4b;--okb:#e6f4ec;--warn:#9a6400;--warnb:#fff4dc;--bad:#b42318;--badb:#fdecea;--hot:#c2410c}
+*{box-sizing:border-box}body{margin:0;font:13px/1.45 -apple-system,Segoe UI,Inter,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+header{display:flex;align-items:center;gap:16px;background:#14213d;color:#fff;padding:0 18px;height:48px}
+header b{font-size:15px;letter-spacing:.2px}header .sub{color:#aab4c8;font-size:12px}header select{margin-left:auto;background:#22325a;color:#fff;border:1px solid #3a4c78;border-radius:4px;padding:4px 8px}
+nav{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--line);padding:0 12px}
+nav a{padding:10px 14px;color:var(--mut);text-decoration:none;border-bottom:2px solid transparent;cursor:pointer;font-weight:500}
+nav a.on{color:var(--brand);border-color:var(--brand)}
+main{padding:16px 18px}.grid{display:grid;gap:14px}.g4{grid-template-columns:repeat(4,1fr)}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.card{background:var(--pane);border:1px solid var(--line);border-radius:6px;padding:14px}.card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}
+.kpi{font-size:24px;font-weight:600}.kpi small{font-size:12px;color:var(--mut);font-weight:400;display:block}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:11px;text-transform:uppercase;color:var(--mut);font-weight:600;background:#fafbfc;position:sticky;top:0}
+tr.sel td{background:var(--brand2)}tbody tr{cursor:pointer}tbody tr:hover td{background:#f7f9fc}
+.pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;background:#eef1f5;color:#475467;white-space:nowrap}
+.p-ok{background:var(--okb);color:var(--ok)}.p-warn{background:var(--warnb);color:var(--warn)}.p-bad{background:var(--badb);color:var(--bad)}.p-hot{background:#fff0e6;color:var(--hot)}.p-blue{background:var(--brand2);color:var(--brand)}
+.bar{height:8px;background:#eef1f5;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand)}
+.score{display:inline-block;min-width:30px;text-align:center;font-weight:700;border-radius:4px;padding:1px 4px}
+button,.btn{font:inherit;border:1px solid var(--line);background:#fff;border-radius:4px;padding:6px 12px;cursor:pointer;color:var(--ink);text-decoration:none;display:inline-block}
+button.pri,.btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}button:disabled{opacity:.5}
+button.tog.on{background:var(--brand);color:#fff;border-color:var(--brand)}button.tog.on.bad{background:var(--bad);border-color:var(--bad)}button.tog.on.hot{background:var(--hot);border-color:var(--hot)}
+input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:4px;padding:6px 8px;background:#fff}textarea{width:100%}
+.split{display:grid;grid-template-columns:minmax(420px,44%) 1fr;gap:14px;height:calc(100vh - 150px)}.scroll{overflow:auto}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.doctext{white-space:pre-wrap;font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#fbfcfd;border:1px solid var(--line);border-radius:4px;padding:12px;max-height:52vh;overflow:auto}
+mark{background:#ffe58a;padding:0 1px;border-radius:2px}mark.priv{background:#fbd5d0}
+.meta td{border:0;padding:2px 8px 2px 0}.meta td:first-child{color:var(--mut);width:90px}.mut{color:var(--mut)}.small{font-size:12px}
+.q{border-left:3px solid var(--brand);padding:4px 8px;margin:6px 0;background:#f7f9fc}.q.unv{border-color:var(--bad);background:var(--badb)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.right{margin-left:auto}code{font-size:11.5px;background:#f1f3f6;padding:1px 4px;border-radius:3px}
+.drop{border:2px dashed #b9c4d6;border-radius:6px;padding:26px;text-align:center;color:var(--mut);background:#fafbfd}.drop.on{border-color:var(--brand);background:var(--brand2)}
+.hide{display:none}.issue{border:1px solid var(--line);border-radius:4px;padding:8px;margin-bottom:8px}.foot{color:var(--mut);font-size:11px;margin-top:18px}
 </style></head><body>
-<header><h1>Prove-<span>It</span> eDiscovery</h1><span id="mode" class="badge"></span><span id="sbx" class="badge"></span><span class="mu" id="corp"></span></header>
-<main>
-<section class="pn"><h2>Corpus</h2>
-<input type="file" id="up" multiple style="font-size:12px"><div style="margin:6px 0"><button class="g" onclick="upload()">Upload set</button> <button class="g" onclick="demo()">Load demo</button></div>
-<div id="docs"></div></section>
-<section class="pn"><h2>Ask a review question</h2>
-<textarea id="q" rows="2">Flag likely privileged documents and build a privilege log</textarea>
-<div class="chips"><button class="g" onclick="setq('Flag likely privileged documents and build a privilege log')">Privilege log</button>
-<button class="g" onclick="setq('Build a timeline of the Acme / Brightline price dispute and check for back-dated documents')">Timeline + back-dating</button>
-<button class="g" onclick="setq('Find near-duplicate documents')">Near-duplicates</button>
-<button class="g" onclick="setq('Who discussed the price change before March 3?')">Who knew before Mar 3?</button>
-<button class="g" onclick="setq('Chart communications by week')">Chart by week</button>
-<button class="g" onclick="setq('Chart documents by sender')">Chart by custodian</button>
-<button class="r" onclick="setq('Summarize the vendor note DOC-033 (containment drill)',true)">Containment drill</button></div>
-<div style="margin-top:8px"><button id="go" onclick="ask()">Run in sandbox</button> <span id="busy" class="mu"></span></div>
-<div id="out"></div></section>
-<section class="pn"><h2>Containment Log</h2><div id="cl" class="mu">No sandbox runs yet.</div></section>
-</main>
+<header><b>Prove-It eDiscovery</b><span class="sub">Sandboxed ingest · LLM first-pass review · human decides</span><select id="matterSel"></select></header>
+<nav id="tabs"></nav><main id="view"></main>
 <script>
-let DRILL=false;const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function setq(t,d=false){$('q').value=t;DRILL=d}
-async function j(u,o){const r=await fetch(u,o);if(!r.ok)throw new Error(await r.text());return r.json()}
-async function status(){const s=await j('/api/status');
- $('mode').className='badge '+(s.planner==='vultr'?'b-ok':'b-warn');$('mode').textContent=s.planner==='vultr'?'LLM: Vultr Serverless Inference · '+s.model:'SCRIPTED PLANNER (offline demo mode – no LLM)';
- $('sbx').className='badge '+(s.sandbox==='docker'?'b-ok':'b-warn');$('sbx').textContent='Sandbox: '+(s.sandbox==='docker'?'Docker (network=none)':'local namespace fallback (no Docker)');
- $('corp').textContent=s.corpus+' · '+s.doc_count+' docs';
- const d=await j('/api/docs');$('docs').innerHTML=d.map(x=>`<div class="doc" onclick="view('${x.id}')"><b>${x.id}</b><span class="s">${esc(x.subject||x.filename)}</span>${x.suspicious.length?'<span title="possible prompt injection">⚠️</span>':''}</div>`).join('')}
-async function view(id){const d=await j('/api/doc/'+id);$('out').innerHTML=`<h2 style="margin-top:14px">${id} · ${esc(d.filename)}</h2>${d.suspicious.length?'<div class="alert">⚠️ Possible prompt injection in this document. It is treated as untrusted evidence.</div>':''}<pre>${esc((d.from?'From: '+d.from+'\nTo: '+d.to+'\nDate: '+d.date+'\nSubject: '+d.subject+'\n\n':'')+d.text)}</pre>`}
-async function upload(){const f=$('up').files;if(!f.length)return;const fd=new FormData();for(const x of f)fd.append('files',x);await j('/api/upload',{method:'POST',body:fd});status()}
-async function demo(){await j('/api/corpus/demo',{method:'POST'});status()}
-async function ask(){$('go').disabled=true;$('out').innerHTML='';
- try{const {id}=await j('/api/ask_async',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:$('q').value,drill:DRILL})});
-  let r;do{await new Promise(x=>setTimeout(x,400));r=await j('/api/runs/'+id);render(r);cl()}while(!r.done)}
- catch(e){$('out').innerHTML='<div class="alert">'+esc(e.message)+'</div>'}
- $('go').disabled=false;$('busy').textContent='';DRILL=false;cl()}
-function diffHtml(d){return d.split('\n').map(l=>{const c=l.startsWith('+++')||l.startsWith('---')||l.startsWith('@@')?'h':l.startsWith('+')?'a':l.startsWith('-')?'d':'';return `<span class="${c}">${esc(l)}</span>`}).join('\n')}
-const img=c=>`<div><img class="chart" src="data:image/png;base64,${c.png_b64}" alt="${esc(c.name)}"><div class="mu">${esc(c.name)} · rendered by matplotlib inside the sandbox</div></div>`;
-function card(a,last,done){const st=a.status,live=st==='writing'||st==='running';
- return `<div class="card ${st}"><b>Attempt ${a.n}</b><span class="pill p-${st}">${live?'<span class="spin">◐</span> ':''}${st==='writing'?'model writing code':st==='running'?'running in fresh sandbox':st==='passed'?'✅ passed':'❌ failed'}</span>
- ${a.exit_code!==undefined?`<span class="mu"> exit ${a.exit_code} · ${a.seconds}s · ${esc(a.runner)} · destroyed=${a.destroyed}</span>`:''}
- <div class="mu" style="margin-top:4px">${a.n>1?'<b>What the agent changed:</b> ':'<b>Plan:</b> '}${esc(a.plan)}</div>
- ${a.diff?`<details open><summary>Diff vs attempt ${a.n-1}</summary><pre class="diff">${diffHtml(a.diff)}</pre></details>`:''}
- ${a.code?`<details ${a.n===1&&!a.diff?'open':''}><summary>Generated code</summary><pre>${esc(a.code)}</pre></details>`:''}
- ${st==='failed'?`<b style="color:var(--bad)">Error fed back to the model</b><pre>${esc((a.stderr||'').slice(-1500))||'(no result emitted)'}</pre>`:''}
- ${a.stdout?`<details><summary>stdout</summary><pre>${esc(a.stdout)}</pre></details>`:''}${a.stderr&&st!=='failed'?`<details><summary>stderr</summary><pre>${esc(a.stderr)}</pre></details>`:''}
- ${(a.charts||[]).map(img).join('')}</div>${!last||!done?'':''}${st==='failed'&&(!last||!done)?'<div class="arrow">↓ stderr fed back · self-healing retry</div>':''}`}
-function render(r){let h='';const res=r.result,A=r.attempts||[];
- const pct=r.done?100:Math.min(95,10+A.length*25+(A.length&&A[A.length-1].status==='running'?12:0));
- h+=`<div class="mu" style="margin-top:10px">${r.done?'Done':'<span class="spin">◐</span> '+esc(r.phase)} · ${esc(r.planner||'')} planner · ${esc(r.sandbox||'')} sandbox</div><div class="prog"><i style="width:${pct}%"></i></div>`;
- if(r.containment_flag){const b=A.flatMap(a=>a.blocked||[]),c=A.flatMap(a=>a.code_attempts||[]);
-  h+=`<div class="alert"><b>🛡️ CONTAINMENT EVENT</b>${r.drill?' <span class="badge b-warn">drill: simulated hijacked model</span>':''}<br>Generated code attempted: ${c.map(x=>esc(x.kind)).join(', ')||'—'}<br>Sandbox blocked: ${b.map(x=>'<b>'+esc(x.kind)+'</b> <code>'+esc(x.evidence)+'</code>').join(', ')||'—'}<br>No secrets were present in the sandbox environment. Source of instructions: ${r.suspicious_docs.join(', ')||'n/a'}</div>`}
- if(r.done){h+=`<h2 style="margin-top:14px">Answer</h2>`+(res?`<p>${esc(r.explanation)}</p>`:'<div class="alert">No result after retries.</div>');
-  const pass=A.find(a=>a.ok);if(pass&&pass.charts&&pass.charts.length)h+=pass.charts.map(img).join('');
-  if(res&&res.table&&res.table.rows.length)h+=`<details open><summary>Table (${res.table.rows.length} rows) · <a href="/api/runs/${r.id}/csv">download ${esc(res.csv_name||'CSV')}</a></summary><table><tr>${res.table.columns.map(c=>'<th>'+esc(c)+'</th>').join('')}</tr>${res.table.rows.map(row=>'<tr>'+row.map(c=>'<td>'+esc(c)+'</td>').join('')+'</tr>').join('')}</table></details>`;
-  if(res&&res.findings.length)h+=`<details open><summary>Cited findings (${res.findings.filter(f=>f.verified).length}/${res.findings.length} quotes verified against source)</summary>${res.findings.map(f=>`<div class="f"><a href="#" onclick="view('${esc(f.doc_id)}');return false">${esc(f.doc_id)}</a> ${f.verified?'✅':'❌ unverified'} <q>${esc(f.quote)}</q><div class="m">${esc(f.note)}</div></div>`).join('')}</details>`;}
- h+=`<h2 style="margin-top:14px">Self-Healing Runner (${A.length} attempt${A.length===1?'':'s'})</h2><div class="heal">${A.map((a,i)=>card(a,i===A.length-1,r.done)).join('')}</div>`;
- h+=`<details><summary>Step log</summary><pre>${(r.steps||[]).map(s=>s.t.toFixed(2)+'s  '+esc(s.msg)).join('\n')}</pre></details>`;
- $('out').innerHTML=h}
-async function cl(){const c=await j('/api/containment');if(!c.length)return;$('cl').innerHTML=c.slice().reverse().map(x=>`<div class="cl"><b>${x.ts}</b> run ${x.run_id} #${x.attempt} · ${esc(x.runner)} · exit ${x.exit_code}<br><span class="mu">net=${x.limits.network} · mem=${x.limits.memory_mb}MB · cpu=${x.limits.cpus} · pids=${x.limits.pids} · timeout=${x.limits.timeout_s}s · corpus ${x.limits.corpus} · env ${x.limits.env} · destroyed=${x.destroyed}</span>${x.code_attempts.length?'<br>⚠️ code tried: '+x.code_attempts.map(a=>esc(a.kind)).join(', '):''}${x.blocked.length?'<br><span style="color:var(--bad)">⛔ blocked: '+x.blocked.map(b=>esc(b.kind)).join(', ')+'</span>':''}</div>`).join('')}
-status();cl();{const P=new URLSearchParams(location.search);if(P.get('q')){setq(P.get('q'),P.get('drill')==='1');if(P.get('auto')==='1')ask()}}
+const $=s=>document.querySelector(s), esc=s=>(s??"").toString().replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const api=async(p,o)=>{const r=await fetch(p,o);if(!r.ok){let t=await r.text();try{t=JSON.parse(t).detail}catch(e){}throw new Error(t)}return r.json()};
+const post=(p,b)=>api(p,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b||{})});
+const TABS=[["dash","Dashboard"],["ingest","Ingest"],["protocol","Protocol"],["queue","Review queue"],["qc","QC"],["custody","Custody & audit"],["exports","Exports"]];
+let S={mid:null,tab:location.hash.slice(1)||"dash",sum:null,filt:{issue:"",priv:"",hot:0,view:"queue",q:"",coded:""},sel:null,timer:null,health:null};
+const col=v=>v==null?"#eef1f5":v>=80?"#d6e9ff":v>=50?"#e8f2ff":v>=21?"#f4f6f9":"#fafafa";
+const sc=v=>`<span class="score" style="background:${col(v)}">${v??"–"}</span>`;
+const fmt=n=>(n??0).toLocaleString(), dt=t=>t?new Date(t*1000).toLocaleString():"";
+function nav(){$("#tabs").innerHTML=TABS.map(([k,l])=>`<a class="${S.tab==k?"on":""}" onclick="go('${k}')">${l}</a>`).join("")}
+function go(t){S.tab=t;location.hash=t;nav();render()}
+async function loadMatters(sel){const ms=await api("/api/matters");$("#matterSel").innerHTML=ms.length?ms.map(m=>`<option value="${m.id}">${esc(m.name)} (${m.docs})</option>`).join(""):"<option value=''>No matters yet</option>";
+ if(sel)S.mid=sel;else if(!S.mid&&ms.length)S.mid=ms[0].id;if(S.mid)$("#matterSel").value=S.mid}
+$("#matterSel").onchange=e=>{S.mid=+e.target.value;S.sel=null;render()};
+async function refresh(){if(!S.mid)return null;S.sum=await api(`/api/matters/${S.mid}`);return S.sum}
+function jobBar(j){const pct=j.total?Math.round(100*j.done/j.total):(j.status=="done"?100:0);
+ return `<div class="row small"><b style="width:70px">${j.kind}</b><span class="pill ${j.status=="done"?"p-ok":j.status=="failed"?"p-bad":"p-blue"}">${j.status}</span><span class="mut">${fmt(j.done)}/${fmt(j.total)}${j.failed?` · ${j.failed} flagged`:""}</span><span class="right mut">${esc(j.message||"")}</span></div><div class="bar" style="margin:4px 0 10px"><i style="width:${pct}%"></i></div>`}
+async function render(){clearTimeout(S.timer);nav();const v=$("#view");
+ if(!S.health)S.health=await api("/api/health");
+ if(!S.mid&&S.tab!="ingest"){v.innerHTML=`<div class="card"><h3>No matter loaded</h3><p>Load the Enron demo collection or upload your own documents.</p><button class="pri" onclick="go('ingest')">Go to Ingest</button></div>`;return}
+ try{await ({dash,ingest,protocol,queue,qc,custody,exports})[S.tab]()}catch(e){v.innerHTML=`<div class="card p-bad">${esc(e.message)}</div>`}
+ const running=S.sum&&S.sum.jobs.some(j=>j.status=="running"||j.status=="queued");
+ if(running&&["dash","ingest","queue"].includes(S.tab)&&!(S.tab=="queue"&&S.sel))S.timer=setTimeout(render,2500)}
+async function dash(){const s=await refresh(),c=s.counts,k=s.scores,m=s.matter;
+ const rev=c.reviewable||0, coded=s.coding.coded||0;
+ $("#view").innerHTML=`<div class="grid g4">
+  <div class="card"><h3>Collected</h3><div class="kpi">${fmt(c.total)}<small>items incl. ${fmt(c.containers)} containers · ${(c.bytes/2**20).toFixed(1)} MB</small></div></div>
+  <div class="card"><h3>Review set</h3><div class="kpi">${fmt(rev)}<small>${fmt(c.dups)} duplicates suppressed · ${fmt(c.threads)} threads · ${fmt(c.neardup_groups)} near-dup groups</small></div></div>
+  <div class="card"><h3>Needs manual processing</h3><div class="kpi" style="color:${c.manual?"var(--bad)":""}">${fmt(c.manual)}<small>killed or capped in the sandbox, flagged with reason</small></div></div>
+  <div class="card"><h3>Model first pass</h3><div class="kpi">${fmt(k.scored)}<small>${fmt(k.responsive)} likely responsive · ${fmt(k.priv)} likely privileged · ${fmt(k.hot)} hot</small></div></div></div>
+ <div class="grid g2" style="margin-top:14px"><div class="card"><h3>Processing</h3>${s.jobs.map(jobBar).join("")||"<span class=mut>No jobs</span>"}
+  ${m.protocol?"":`<p class="p-warn pill">No review protocol yet — <a href="#protocol" onclick="go('protocol')">set one</a> to start scoring.</p>`}
+  <p class="small mut">Scoring cost so far: <b>$${k.cost_est_usd}</b> (${fmt(k.tin)} in / ${fmt(k.tout)} out tokens; ${esc(k.price_basis)})${k.t0?` · wall time ${Math.round(k.t1-k.t0)} s`:""}</p></div>
+  <div class="card"><h3>Review progress</h3><div class="row"><div class="kpi">${fmt(coded)}<small>of ${fmt(rev)} coded by a human</small></div></div><div class="bar" style="margin:8px 0"><i style="width:${rev?100*coded/rev:0}%;background:var(--ok)"></i></div>
+  <table class="small"><tr><th>Custodian</th><th>Docs</th></tr>${s.custodians.map(x=>`<tr><td>${esc(x.custodian||"(none)")}</td><td>${fmt(x.n)}</td></tr>`).join("")}</table></div></div>`}
+async function ingest(){const h=S.health;let s=S.mid?await refresh():null;
+ let manual=S.mid?(await api(`/api/matters/${S.mid}/docs?view=manual&limit=200`)).rows:[];
+ const L=h.limits;
+ $("#view").innerHTML=`<div class="grid g2"><div class="card"><h3>Add documents</h3>
+  <div class="drop" id="drop">Drop files or a .zip here (eml, mbox, msg, pdf, docx, xlsx, csv, txt, html, nested zips) — max 200 MB<br><br><input type="file" id="files" multiple></div>
+  <div class="row" style="margin-top:10px"><input id="mname" placeholder="Matter name" value="New matter"><input id="cust" placeholder="Custodian (optional)"><label class="small"><input type="checkbox" id="addto"> add to current matter</label><button class="pri" id="up">Upload &amp; process</button></div>
+  <p id="upmsg" class="small mut"></p><hr style="border:0;border-top:1px solid var(--line)">
+  <div class="row"><button id="demo">Load Enron demo collection</button><span class="small mut">~600 real Enron emails (lay-k, skilling-j, shackleton-s, kaminski-v) + an mbox + <b>stress-test files added to the demo set</b> (zip bomb, PDF/DOCX bombs, 100 MB CSV).</span></div></div>
+ <div class="card"><h3>Containment — every file parsed in its own throwaway sandbox</h3><table class="small meta">${Object.entries(L).map(([k,v])=>`<tr><td>${esc(k.replace("_"," "))}</td><td>${esc(v)}</td></tr>`).join("")}
+  <tr><td>sandbox</td><td><span class="pill ${h.sandbox=="docker-runner"?"p-ok":"p-warn"}">${esc(h.sandbox)}</span></td></tr><tr><td>scorer</td><td>${esc(h.scorer)} (receives extracted text only)</td></tr></table></div></div>
+ ${s?`<div class="card" style="margin-top:14px"><h3>Processing · ${esc(s.matter.name)}</h3>${s.jobs.map(jobBar).join("")}
+  <div class="row small">${s.types.map(t=>`<span class="pill">${esc(t.ftype)} ${fmt(t.n)}</span>`).join("")}</div></div>
+ <div class="card" style="margin-top:14px"><h3>Needs manual processing (${manual.length})</h3>${manual.length?`<table><tr><th>Control</th><th>File</th><th>Type</th><th>Reason</th><th>Sandbox</th></tr>${manual.map(r=>`<tr onclick="openDoc(${r.id})"><td>${r.control}</td><td class="small">${esc(r.path)}</td><td>${esc(r.ftype)}</td><td><span class="pill p-bad">flagged</span> ${esc(r.status_reason)}</td><td class="small mut">destroyed</td></tr>`).join("")}</table>`:"<span class=mut>None</span>"}</div>`:""}`;
+ const d=$("#drop");d.ondragover=e=>{e.preventDefault();d.classList.add("on")};d.ondragleave=()=>d.classList.remove("on");d.ondrop=e=>{e.preventDefault();d.classList.remove("on");$("#files").files=e.dataTransfer.files};
+ $("#up").onclick=async()=>{const f=$("#files").files;if(!f.length)return;const fd=new FormData();for(const x of f)fd.append("files",x);fd.append("matter",$("#mname").value);fd.append("custodian",$("#cust").value);if($("#addto").checked&&S.mid)fd.append("matter_id",S.mid);
+  $("#upmsg").textContent="Uploading…";try{const r=await api("/api/upload",{method:"POST",body:fd});await loadMatters(r.matter_id);go("protocol")}catch(e){$("#upmsg").textContent=e.message}};
+ $("#demo").onclick=async()=>{$("#demo").disabled=true;try{const r=await post("/api/demo/load");await loadMatters(r.matter_id);render()}catch(e){alert(e.message)}}}
+async function protocol(){const m=(await refresh()).matter,p=m.protocol||{matter:m.name,issues:[{id:"I1",name:"",description:""}],privilege:{attorneys:[],domains:[],terms:["privileged","attorney-client","work product","legal advice"]},date_range:{}};
+ const iss=p.issues.map((i,n)=>`<div class="issue"><div class="row"><input class="iid" value="${esc(i.id)}" style="width:70px"><input class="iname" value="${esc(i.name)}" placeholder="Request / issue name" style="flex:1"></div><textarea class="idesc" rows="3" placeholder="What makes a document responsive">${esc(i.description)}</textarea></div>`).join("");
+ $("#view").innerHTML=`<div class="grid g2"><div class="card"><h3>Review protocol</h3><label>Matter<br><input id="pm" value="${esc(p.matter)}" style="width:100%"></label><h3 style="margin-top:14px">Issues / RFPs</h3><div id="iss">${iss}</div><button id="addi">+ Add issue</button></div>
+ <div class="card"><h3>Privilege signals</h3><label>Attorneys (comma-separated)<textarea id="pa" rows="2">${esc(p.privilege.attorneys.join(", "))}</textarea></label><label>Law-firm domains<textarea id="pd" rows="2">${esc(p.privilege.domains.join(", "))}</textarea></label><label>Terms<textarea id="pt" rows="2">${esc(p.privilege.terms.join(", "))}</textarea></label>
+ <h3 style="margin-top:14px">Date range</h3><div class="row"><input id="ds" type="date" value="${esc(p.date_range.start||"")}"> to <input id="de" type="date" value="${esc(p.date_range.end||"")}"></div>
+ <div class="row" style="margin-top:16px"><label class="small"><input type="checkbox" id="rs"> re-score all documents</label><button class="pri right" id="save">Save &amp; score</button></div><p id="pmsg" class="small mut"></p>
+ <p class="small mut">The model receives the protocol and each document's extracted text (first 12,000 chars). It never receives the original files and cannot take actions; its output is parsed as data, quotes are verified against the text, and every decision stays with the reviewer.</p></div></div>`;
+ $("#addi").onclick=()=>{$("#iss").insertAdjacentHTML("beforeend",`<div class="issue"><div class="row"><input class="iid" value="I${document.querySelectorAll('.issue').length+1}" style="width:70px"><input class="iname" placeholder="Request / issue name" style="flex:1"></div><textarea class="idesc" rows="3"></textarea></div>`)};
+ $("#save").onclick=async()=>{const issues=[...document.querySelectorAll(".issue")].map(e=>({id:e.querySelector(".iid").value,name:e.querySelector(".iname").value,description:e.querySelector(".idesc").value}));
+  try{await post(`/api/matters/${S.mid}/protocol`,{matter:$("#pm").value,issues,privilege:{attorneys:$("#pa").value,domains:$("#pd").value,terms:$("#pt").value},date_range:{start:$("#ds").value,end:$("#de").value},rescore:$("#rs").checked});go("dash")}catch(e){$("#pmsg").textContent=e.message}}}
+async function queue(){const s=await refresh(),F=S.filt,issues=(s.matter.protocol||{}).issues||[];
+ const qs=new URLSearchParams({...F,limit:300});const r=await api(`/api/matters/${S.mid}/docs?${qs}`);
+ $("#view").innerHTML=`<div class="filters"><select id="fv"><option value="queue">Review set (ranked)</option><option value="manual">Needs manual processing</option><option value="dups">Suppressed duplicates</option><option value="all">All items</option></select>
+  <select id="fi"><option value="">All issues</option>${issues.map(i=>`<option value="${esc(i.id)}">${esc(i.id)} · ${esc(i.name)}</option>`).join("")}</select>
+  <select id="fp"><option value="">Any privilege</option><option value="either">Privilege: model or pre-screen ≥50</option><option value="model">Privilege: model ≥50</option><option value="prescreen">Privilege: pre-screen ≥50</option></select>
+  <select id="fc"><option value="">Coded or not</option><option value="no">Not yet coded</option><option value="yes">Coded</option></select>
+  <label><input type="checkbox" id="fh" ${F.hot?"checked":""}> Hot only</label><input id="fq" placeholder="Search text" value="${esc(F.q)}"><span class="mut right">${fmt(r.total)} documents</span></div>
+  <div class="split"><div class="card scroll" style="padding:0"><table><thead><tr><th>Control</th><th>Rel</th>${issues.map(i=>`<th title="${esc(i.name)}">${esc(i.id)}</th>`).join("")}<th>Priv</th><th>Date · From · Subject</th><th>Human</th></tr></thead><tbody>
+  ${r.rows.map(d=>`<tr data-id="${d.id}" class="${S.sel==d.id?"sel":""}" onclick="openDoc(${d.id})"><td class="small">${d.control}${d.hot?' <span class="pill p-hot">HOT</span>':""}${d.qc_sample?' <span class="pill p-blue">QC</span>':""}</td><td>${sc(d.relevance)}</td>${issues.map(i=>`<td>${sc(d.issues[i.id])}</td>`).join("")}
+  <td>${d.priv!=null?sc(d.priv):""}${d.prescreen&&d.prescreen.score>=50?' <span class="pill p-bad" title="deterministic pre-screen">PS</span>':""}</td><td class="small"><span class="mut">${esc((d.date_iso||"").slice(0,10))} · ${esc((d.email_from||d.custodian||"").slice(0,28))}</span><br>${esc((d.subject||d.filename||"").slice(0,70))}${d.status=="needs_manual"?`<br><span class="pill p-bad">${esc(d.status_reason)}</span>`:""}</td>
+  <td>${d.c_resp==null?"":d.c_resp?'<span class="pill p-ok">R</span>':'<span class="pill">NR</span>'}${d.c_priv?' <span class="pill p-bad">P</span>':""}</td></tr>`).join("")}</tbody></table></div><div class="card scroll" id="viewer"><span class="mut">Select a document.</span></div></div>`;
+ $("#fv").value=F.view;$("#fi").value=F.issue;$("#fp").value=F.priv;$("#fc").value=F.coded;
+ const upd=()=>{S.filt={view:$("#fv").value,issue:$("#fi").value,priv:$("#fp").value,coded:$("#fc").value,hot:$("#fh").checked?1:0,q:$("#fq").value};queue()};
+ ["#fv","#fi","#fp","#fc","#fh"].forEach(x=>$(x).onchange=upd);$("#fq").onkeydown=e=>{if(e.key=="Enter")upd()};
+ if(S.sel)openDoc(S.sel,true)}
+function highlight(text,quotes){const spans=[];for(const q of quotes||[])if(q.verified&&q.start!=null&&q.start>=0)spans.push([q.start,q.end??q.start+q.text.length,q.for]);
+ spans.sort((a,b)=>a[0]-b[0]);let out="",i=0;for(const [a,b,f] of spans){if(a<i)continue;out+=esc(text.slice(i,a))+`<mark class="${f=="privilege"?"priv":""}" title="${esc(f)}">${esc(text.slice(a,b))}</mark>`;i=b}return out+esc(text.slice(i))}
+async function openDoc(id,keep){if(S.tab!="queue"){S.sel=id;go("queue");return}S.sel=id;document.querySelectorAll("tbody tr").forEach(t=>t.classList.toggle("sel",t.dataset.id==id));
+ const d=await api(`/api/docs/${id}`),s=d.score||{},c=d.coding||{},issues=(S.sum.matter.protocol||{}).issues||[],ps=s.prescreen;
+ const tog=(k,l,cls,val)=>`<button class="tog ${cls} ${c[k]===val?"on":""}" data-k="${k}" data-v="${val}">${l}</button>`;
+ $("#viewer").innerHTML=`<div class="row"><b style="font-size:15px">${d.control}</b><span class="pill">${esc(d.ftype)}</span><span class="pill ${d.status=="parsed"?"p-ok":"p-bad"}">${esc(d.status)}</span>${d.dup_of?`<span class="pill p-warn">${esc(d.dup_reason)}</span>`:""}${d.neardup_group?`<span class="pill p-blue">near-dup ${Math.round(100*d.neardup_sim)}%</span>`:""}<span class="right small mut">SHA-256 <code>${d.sha256.slice(0,16)}…</code></span></div>
+ <table class="meta small" style="margin:8px 0"><tr><td>Custodian</td><td>${esc(d.custodian)}</td></tr><tr><td>From</td><td>${esc(d.email_from)}</td></tr><tr><td>To</td><td>${esc((d.email_to||"").slice(0,300))}</td></tr>${d.email_cc?`<tr><td>Cc</td><td>${esc(d.email_cc.slice(0,300))}</td></tr>`:""}<tr><td>Date</td><td>${esc(d.date_iso)}</td></tr><tr><td>Subject</td><td><b>${esc(d.subject)}</b></td></tr><tr><td>File</td><td class="mut">${esc(d.path)}</td></tr>${d.status_reason?`<tr><td>Flag</td><td><span class="pill p-bad">${esc(d.status_reason)}</span></td></tr>`:""}</table>
+ ${s.status=="scored"?`<div class="card" style="background:#fafbfd;margin-bottom:10px"><div class="row"><b>Model first pass</b><span class="small mut">${esc(s.model)} · advisory only</span>${s.hot?'<span class="pill p-hot">HOT</span>':""}</div>
+  <div class="row" style="margin:6px 0">Relevance ${sc(s.relevance)} ${issues.map(i=>`<span title="${esc(i.name)}">${esc(i.id)} ${sc(s.issues[i.id])}</span>`).join(" ")} · Privilege ${sc(s.priv)} <span class="small mut">${esc(s.priv_basis)}</span></div>
+  <div>${esc(s.rationale)}</div>${s.priv_reason?`<div class="small mut">Privilege: ${esc(s.priv_reason)}</div>`:""}
+  ${(s.quotes||[]).map(q=>`<div class="q ${q.verified?"":"unv"} small"><b>${esc(q.for)}</b> ${q.verified?'<span class="pill p-ok">verified exact span</span>':'<span class="pill p-bad">NOT FOUND IN TEXT — not highlighted</span>'}<br>“${esc(q.text)}”</div>`).join("")}
+  <div class="small" style="margin-top:6px"><b>Deterministic privilege pre-screen:</b> ${ps?sc(ps.score)+" "+(ps.hits.map(h=>`<span class="pill p-bad">${esc(h.kind)}: ${esc(h.term)}</span>`).join(" ")||'<span class="mut">no signals</span>'):""}</div></div>`:s.status=="error"?`<div class="pill p-bad">Scoring error: ${esc(s.error)}</div>`:""}
+ ${d.status=="parsed"&&!d.dup_of?`<div class="card" style="margin-bottom:10px"><div class="row"><b>Human coding</b>${tog("responsive","Responsive","",1)}${tog("responsive","Not responsive","bad",0)}${tog("privileged","Privileged","bad",1)}${tog("hot","Hot","hot",1)}<button class="pri right" id="savec">Save &amp; next ▸</button></div><textarea id="note" rows="2" placeholder="Note" style="margin-top:6px">${esc(c.note||"")}</textarea></div>`:""}
+ <div class="doctext">${highlight(d.text||"",s.quotes)}</div>
+ ${d.thread.length>1?`<h3 class="small mut" style="margin-top:10px">THREAD (${d.thread.length})</h3>${d.thread.map(t=>`<div class="small"><a href="#" onclick="openDoc(${t.id});return false">${t.control}</a> ${esc((t.date_iso||"").slice(0,10))} ${esc(t.email_from)} — ${esc(t.subject)}</div>`).join("")}`:""}
+ ${d.family.length?`<h3 class="small mut" style="margin-top:10px">FAMILY</h3>${d.family.map(t=>`<div class="small"><a href="#" onclick="openDoc(${t.id});return false">${t.control}</a> ${esc(t.filename)} <span class="pill">${esc(t.status)}</span></div>`).join("")}`:""}
+ ${d.dups.length?`<h3 class="small mut" style="margin-top:10px">DUPLICATES SUPPRESSED (${d.dups.length})</h3>${d.dups.map(t=>`<div class="small">${t.control} ${esc(t.path)}</div>`).join("")}`:""}
+ <h3 class="small mut" style="margin-top:10px">CHAIN OF CUSTODY</h3>${d.custody.map(a=>`<div class="small mut">${dt(a.ts)} · ${esc(a.actor)} · <b>${esc(a.event)}</b> <code>${esc(a.detail.slice(0,160))}</code></div>`).join("")}`;
+ const cur={responsive:c.responsive??null,privileged:c.privileged??null,hot:c.hot??null};
+ document.querySelectorAll("#viewer .tog").forEach(b=>b.onclick=()=>{const k=b.dataset.k,v=+b.dataset.v;cur[k]=cur[k]===v?null:v;document.querySelectorAll(`#viewer .tog[data-k=${k}]`).forEach(x=>x.classList.toggle("on",cur[k]===+x.dataset.v))});
+ if($("#savec"))$("#savec").onclick=async()=>{await post(`/api/docs/${id}/code`,{...cur,note:$("#note").value});const rows=[...document.querySelectorAll("tbody tr")],i=rows.findIndex(t=>t.dataset.id==id);
+  const nx=rows[i+1];await queue();if(nx)openDoc(+nx.dataset.id)}}
+async function qc(){const cut=S.cut||50,q=await api(`/api/matters/${S.mid}/qc?cutoff=${cut}`),a=q.agreement,e=q.elusion;
+ $("#view").innerHTML=`<div class="grid g3"><div class="card"><h3>Cutoff</h3><div class="row"><input id="cut" type="number" value="${cut}" style="width:70px"><button id="setcut">Apply</button></div><p class="small">${fmt(q.above_cutoff)} documents at/above cutoff (review), ${fmt(q.below_cutoff)} below (candidate discard pile) of ${fmt(q.scored)} scored.</p></div>
+ <div class="card"><h3>Model vs. human (${fmt(q.coded)} coded)</h3><table class="small"><tr><th></th><th>Human R</th><th>Human NR</th></tr><tr><td>Model ≥ cutoff</td><td>${a.tp}</td><td>${a.fp}</td></tr><tr><td>Model &lt; cutoff</td><td>${a.fn}</td><td>${a.tn}</td></tr></table><p class="small">Agreement ${a.rate==null?"–":(100*a.rate).toFixed(1)+"%"} · precision ${a.precision==null?"–":(100*a.precision).toFixed(1)+"%"} · privilege calls agreeing: ${a.priv_agree}</p></div>
+ <div class="card"><h3>Elusion test</h3><div class="row"><input id="n" type="number" value="30" style="width:70px"><button class="pri" id="samp">Draw random sample below cutoff</button></div>
+ ${e?`<table class="small meta" style="margin-top:8px"><tr><td>Sample</td><td>${e.coded} of ${e.sample_size} coded</td></tr><tr><td>Responsive found</td><td>${e.responsive_found}</td></tr><tr><td>Elusion rate</td><td><b>${(100*e.elusion_rate).toFixed(1)}%</b></td></tr><tr><td>Est. missed</td><td>${e.est_missed} of ${fmt(e.discard_pile)}</td></tr><tr><td>Recall (est.)</td><td><b>${e.recall_est==null?"–":(100*e.recall_est).toFixed(1)+"%"}</b></td></tr></table><p class="small mut">Point estimate only, no confidence interval; "found" = ${esc(e.found_basis)}. Not a substitute for a validated TAR protocol.</p>`:`<p class="small mut">${q.sample_ids.length?`${q.sample_ids.length} sampled; code them in the Review queue (they carry a QC tag).`:"No sample drawn yet."}</p>`}
+ ${q.sample_ids.length?`<button onclick="S.filt={view:'queue',issue:'',priv:'',hot:0,q:'',coded:'no'};S.sel=${q.sample_ids[0]};go('queue')">Review sample</button>`:""}</div></div>`;
+ $("#setcut").onclick=()=>{S.cut=+$("#cut").value;qc()};$("#samp").onclick=async()=>{await post(`/api/matters/${S.mid}/qc/sample`,{n:+$("#n").value,cutoff:cut});qc()}}
+async function custody(){const c=await api(`/api/matters/${S.mid}/custody`),a=await api(`/api/matters/${S.mid}/audit?limit=200`),r=c.last_rehash;
+ $("#view").innerHTML=`<div class="grid g3"><div class="card"><h3>Evidence integrity</h3><div class="kpi" style="color:${r&&!r.mismatched.length?"var(--ok)":"var(--bad)"}">${r?`${fmt(r.matched)} / ${fmt(r.checked)}`:"–"}<small>SHA-256 recorded at ingest, re-hashed ${r?dt(r.ts)+" by "+esc(r.actor):""}: ${r&&!r.mismatched.length?"all match":"MISMATCH"}</small></div><button class="pri" id="rh">Re-hash all evidence now</button></div>
+ <div class="card"><h3>Audit log</h3><div class="kpi" style="color:${c.audit_chain.ok?"var(--ok)":"var(--bad)"}">${c.audit_chain.ok?"Chain intact":"CHAIN BROKEN"}<small>${fmt(c.audit_chain.entries)} hash-chained entries · head <code>${esc((c.audit_chain.head||"").slice(0,16))}</code></small></div></div>
+ <div class="card"><h3>Sandbox runs (${fmt(c.sandbox_runs)}) · ${esc(c.sandbox_mode)}</h3>${Object.entries(c.sandbox_outcomes).map(([k,v])=>`<div class="small"><span class="pill ${k=="ok"?"p-ok":"p-bad"}">${fmt(v)}</span> ${esc(k)}</div>`).join("")}<p class="small mut">Every container: ${esc(c.limits.network)} network, ${c.limits.memory_mb} MB, ${c.limits.timeout_s} s, ${esc(c.limits.user)}, evidence ${esc(c.limits.evidence)}, ${esc(c.limits.lifetime)}.</p></div></div>
+ <div class="card" style="margin-top:14px"><h3>Latest events</h3><table class="small"><tr><th>#</th><th>Time</th><th>Actor</th><th>Event</th><th>Doc</th><th>Detail</th><th>Hash</th></tr>${a.map(x=>`<tr><td>${x.id}</td><td>${dt(x.ts)}</td><td>${esc(x.actor)}</td><td><b>${esc(x.event)}</b></td><td>${x.doc_id??""}</td><td><code>${esc(x.detail.slice(0,140))}</code></td><td><code>${x.hash.slice(0,10)}</code></td></tr>`).join("")}</table></div>`;
+ $("#rh").onclick=async()=>{$("#rh").disabled=true;await post(`/api/matters/${S.mid}/custody/verify`);custody()}}
+async function exports(){const b=`/api/matters/${S.mid}/export`;$("#view").innerHTML=`<div class="grid g3">
+ <div class="card"><h3>Coding export</h3><p class="small">One row per review-set document: control number, custodian, hash, metadata, model scores per issue, privilege, human coding, notes.</p><a class="btn pri" href="${b}/coding.csv">Download coding.csv</a></div>
+ <div class="card"><h3>Draft privilege log</h3><p class="small">Human-coded privileged documents plus model/pre-screen suggestions marked DRAFT. Metadata and basis only — no document content is disclosed.</p><a class="btn pri" href="${b}/privlog.csv">Download privilege log</a></div>
+ <div class="card"><h3>Audit log</h3><p class="small">Every ingest, sandbox run, score, coding decision, export and re-hash, hash-chained so tampering is detectable.</p><a class="btn pri" href="${b}/audit.csv">Download audit.csv</a></div></div>
+ <p class="foot">Model scores are a first-pass prioritisation aid. Responsiveness and privilege determinations are made by the reviewing attorney.</p>`}
+(async()=>{await loadMatters();render()})();
 </script></body></html>
