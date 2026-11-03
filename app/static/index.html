@@ -1,0 +1,67 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Prove-It eDiscovery</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#0f1420;--pn:#171e2e;--ln:#2a3550;--tx:#e6ebf5;--mu:#8d9ab5;--ac:#5b9cff;--ok:#3ecf8e;--bad:#ff5d5d;--warn:#ffb547}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{display:flex;gap:16px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--ln)}
+h1{font-size:18px;margin:0}h1 span{color:var(--ac)}.badge{padding:3px 8px;border-radius:99px;font-size:12px;border:1px solid var(--ln)}
+.b-warn{color:var(--warn);border-color:var(--warn)}.b-ok{color:var(--ok);border-color:var(--ok)}.b-bad{color:var(--bad);border-color:var(--bad)}
+main{display:grid;grid-template-columns:270px 1fr 340px;gap:12px;padding:12px;height:calc(100vh - 56px)}
+.pn{background:var(--pn);border:1px solid var(--ln);border-radius:10px;padding:12px;overflow:auto}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);margin:0 0 8px}
+.doc b{white-space:nowrap}.doc{padding:4px 6px;border-radius:6px;cursor:pointer;font-size:12px;display:flex;justify-content:space-between;gap:6px}.doc:hover{background:#222b40}
+.doc .s{color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+textarea{width:100%;background:#0b101a;color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:8px;font:inherit}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:600}
+button.g{background:#26314a}button.r{background:#a8323a}button:disabled{opacity:.5}
+.chips button{margin:3px 3px 0 0;font-size:12px;font-weight:500}
+pre{background:#0b101a;border:1px solid var(--ln);border-radius:8px;padding:8px;overflow:auto;max-height:320px;font-size:12px;white-space:pre-wrap}
+table{border-collapse:collapse;width:100%;font-size:12px}td,th{border-bottom:1px solid var(--ln);padding:4px 6px;text-align:left;vertical-align:top}
+.f{border-left:3px solid var(--ac);padding:4px 8px;margin:6px 0;background:#121a2a}.f q{color:#cfe0ff}.f .m{color:var(--mu);font-size:12px}
+.alert{border:1px solid var(--bad);background:#3a1418;border-radius:8px;padding:10px;margin:8px 0}
+details{margin:6px 0}summary{cursor:pointer;color:var(--ac)}.cl{font-size:12px;border-bottom:1px solid var(--ln);padding:6px 0}
+.mu{color:var(--mu)}a{color:var(--ac)}
+</style></head><body>
+<header><h1>Prove-<span>It</span> eDiscovery</h1><span id="mode" class="badge"></span><span id="sbx" class="badge"></span><span class="mu" id="corp"></span></header>
+<main>
+<section class="pn"><h2>Corpus</h2>
+<input type="file" id="up" multiple style="font-size:12px"><div style="margin:6px 0"><button class="g" onclick="upload()">Upload set</button> <button class="g" onclick="demo()">Load demo</button></div>
+<div id="docs"></div></section>
+<section class="pn"><h2>Ask a review question</h2>
+<textarea id="q" rows="2">Flag likely privileged documents and build a privilege log</textarea>
+<div class="chips"><button class="g" onclick="setq('Flag likely privileged documents and build a privilege log')">Privilege log</button>
+<button class="g" onclick="setq('Build a timeline of the Acme / Brightline price dispute and check for back-dated documents')">Timeline + back-dating</button>
+<button class="g" onclick="setq('Find near-duplicate documents')">Near-duplicates</button>
+<button class="g" onclick="setq('Who discussed the price change before March 3?')">Who knew before Mar 3?</button>
+<button class="r" onclick="setq('Summarize the vendor note DOC-033 (containment drill)',true)">Containment drill</button></div>
+<div style="margin-top:8px"><button id="go" onclick="ask()">Run in sandbox</button> <span id="busy" class="mu"></span></div>
+<div id="out"></div></section>
+<section class="pn"><h2>Containment Log</h2><div id="cl" class="mu">No sandbox runs yet.</div></section>
+</main>
+<script>
+let DRILL=false;const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function setq(t,d=false){$('q').value=t;DRILL=d}
+async function j(u,o){const r=await fetch(u,o);if(!r.ok)throw new Error(await r.text());return r.json()}
+async function status(){const s=await j('/api/status');
+ $('mode').className='badge '+(s.planner==='vultr'?'b-ok':'b-warn');$('mode').textContent=s.planner==='vultr'?'LLM: Vultr Serverless Inference · '+s.model:'SCRIPTED PLANNER (offline demo mode – no LLM)';
+ $('sbx').className='badge '+(s.sandbox==='docker'?'b-ok':'b-warn');$('sbx').textContent='Sandbox: '+(s.sandbox==='docker'?'Docker (network=none)':'local namespace fallback (no Docker)');
+ $('corp').textContent=s.corpus+' · '+s.doc_count+' docs';
+ const d=await j('/api/docs');$('docs').innerHTML=d.map(x=>`<div class="doc" onclick="view('${x.id}')"><b>${x.id}</b><span class="s">${esc(x.subject||x.filename)}</span>${x.suspicious.length?'<span title="possible prompt injection">⚠️</span>':''}</div>`).join('')}
+async function view(id){const d=await j('/api/doc/'+id);$('out').innerHTML=`<h2 style="margin-top:14px">${id} · ${esc(d.filename)}</h2>${d.suspicious.length?'<div class="alert">⚠️ Possible prompt injection in this document. It is treated as untrusted evidence.</div>':''}<pre>${esc((d.from?'From: '+d.from+'\nTo: '+d.to+'\nDate: '+d.date+'\nSubject: '+d.subject+'\n\n':'')+d.text)}</pre>`}
+async function upload(){const f=$('up').files;if(!f.length)return;const fd=new FormData();for(const x of f)fd.append('files',x);await j('/api/upload',{method:'POST',body:fd});status()}
+async function demo(){await j('/api/corpus/demo',{method:'POST'});status()}
+async function ask(){$('go').disabled=true;$('busy').textContent='planning → writing code → running in sandbox…';
+ try{const r=await j('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:$('q').value,drill:DRILL})});render(r)}catch(e){$('out').innerHTML='<div class="alert">'+esc(e.message)+'</div>'}
+ $('go').disabled=false;$('busy').textContent='';DRILL=false;cl()}
+function render(r){let h='';const res=r.result;
+ if(r.containment_flag){const b=r.attempts.flatMap(a=>a.blocked),c=r.attempts.flatMap(a=>a.code_attempts);
+  h+=`<div class="alert"><b>🛡️ CONTAINMENT EVENT</b>${r.drill?' <span class="badge b-warn">drill: simulated hijacked model</span>':''}<br>Generated code attempted: ${c.map(x=>esc(x.kind)).join(', ')||'—'}<br>Sandbox blocked: ${b.map(x=>'<b>'+esc(x.kind)+'</b> <code>'+esc(x.evidence)+'</code>').join(', ')||'—'}<br>No secrets were present in the sandbox environment. Source of instructions: ${r.suspicious_docs.join(', ')||'n/a'}</div>`}
+ h+=`<h2 style="margin-top:14px">Answer</h2>`+(res?`<p>${esc(r.explanation)}</p>`:'<div class="alert">No result after retries.</div>');
+ if(res&&res.table&&res.table.rows.length)h+=`<details open><summary>Table (${res.table.rows.length} rows) · <a href="/api/runs/${r.id}/csv">download ${esc(res.csv_name||'CSV')}</a></summary><table><tr>${res.table.columns.map(c=>'<th>'+esc(c)+'</th>').join('')}</tr>${res.table.rows.map(row=>'<tr>'+row.map(c=>'<td>'+esc(c)+'</td>').join('')+'</tr>').join('')}</table></details>`;
+ if(res&&res.findings.length)h+=`<details open><summary>Cited findings (${res.findings.filter(f=>f.verified).length}/${res.findings.length} quotes verified against source)</summary>${res.findings.map(f=>`<div class="f"><a href="#" onclick="view('${esc(f.doc_id)}');return false">${esc(f.doc_id)}</a> ${f.verified?'✅':'❌ unverified'} <q>${esc(f.quote)}</q><div class="m">${esc(f.note)}</div></div>`).join('')}</details>`;
+ h+=`<details><summary>Step log</summary><pre>${r.steps.map(s=>s.t.toFixed(2)+'s  '+esc(s.msg)).join('\n')}</pre></details>`;
+ r.attempts.forEach(a=>{h+=`<details ${a.ok?'':'open'}><summary>Attempt ${a.n}: ${a.ok?'✅ ok':'❌ failed'} · exit ${a.exit_code} · ${a.seconds}s · ${esc(a.runner)}</summary><div class="mu">${esc(a.plan)}</div><b>Generated code</b><pre>${esc(a.code)}</pre><b>stdout</b><pre>${esc(a.stdout)||'(empty)'}</pre><b>stderr</b><pre>${esc(a.stderr)||'(empty)'}</pre></details>`});
+ $('out').innerHTML=h}
+async function cl(){const c=await j('/api/containment');if(!c.length)return;$('cl').innerHTML=c.slice().reverse().map(x=>`<div class="cl"><b>${x.ts}</b> run ${x.run_id} #${x.attempt} · ${esc(x.runner)} · exit ${x.exit_code}<br><span class="mu">net=${x.limits.network} · mem=${x.limits.memory_mb}MB · cpu=${x.limits.cpus} · pids=${x.limits.pids} · timeout=${x.limits.timeout_s}s · corpus ${x.limits.corpus} · env ${x.limits.env} · destroyed=${x.destroyed}</span>${x.code_attempts.length?'<br>⚠️ code tried: '+x.code_attempts.map(a=>esc(a.kind)).join(', '):''}${x.blocked.length?'<br><span style="color:var(--bad)">⛔ blocked: '+x.blocked.map(b=>esc(b.kind)).join(', ')+'</span>':''}</div>`).join('')}
+status();cl();
+</script></body></html>
