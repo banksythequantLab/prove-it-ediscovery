@@ -19,8 +19,14 @@ def pick(c, n):
     return hits + rand
 z = zipfile.ZipFile(OUT / "enron_demo.zip", "w", zipfile.ZIP_DEFLATED)
 n = 0
+# genuine, unmodified Enron emails with outside counsel (Vinson & Elkins, Andrews Kurth), always included so the
+# privilege workflow has real attorney-client material to find
+COUNSEL = ["shackleton-s/inbox/216.", "lay-k/discussion_threads/204.", "shackleton-s/notes_inbox/477."]
+seen = set()
 for c, k in CUST.items():
-    for p in pick(c, k):
+    for p in pick(c, k) + [SRC / x for x in COUNSEL if x.startswith(c + "/")]:
+        if p in seen: continue
+        seen.add(p)
         rel = p.relative_to(SRC / c); z.writestr(f"{c}/{'/'.join(rel.parts[:-1])}/{rel.parts[-1].rstrip('.')}.eml", p.read_bytes()); n += 1
 # a few cross-folder exact duplicates (Enron users filed the same message in several folders)
 for c in ("lay-k", "skilling-j"):
@@ -72,6 +78,19 @@ row = "2001-01-17,PG&E,SP15,{i},250.00,MWh,trader_{t}\n"
 csv = io.StringIO(); csv.write("date,counterparty,hub,deal_id,price,unit,trader\n"); i = 0
 while csv.tell() < 100 << 20: csv.write(row.format(i=i, t=i % 97)); i += 1
 z.writestr(f"{S}/huge_trade_blotter_100MB.csv", csv.getvalue())
+# a genuine Enron email (shackleton-s/notes_inbox/1449, unmodified text) rendered to an image-only "scanned" PDF:
+# an ADDED test file (the corpus has no scans) that exercises sandboxed OCR. Needs Pillow + DejaVu fonts at build time.
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+src = (SRC / "shackleton-s/notes_inbox/1449.").read_text("latin-1").replace("\t", "    ")
+font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 26)
+lines = [l for raw in src.splitlines() for l in ([raw[i:i + 78] for i in range(0, len(raw), 78)] or [""])]
+pages = []
+for i in range(0, len(lines), 62):
+    im = Image.new("L", (1700, 2200), 255); dr = ImageDraw.Draw(im)
+    for j, l in enumerate(lines[i:i + 62]): dr.text((110, 110 + j * 32), l, fill=25, font=font)
+    pages.append(im.rotate(0.4, fillcolor=255).filter(ImageFilter.GaussianBlur(0.6)).convert("RGB"))
+scan = io.BytesIO(); pages[0].save(scan, "PDF", resolution=200, save_all=True, append_images=pages[1:])
+z.writestr("zz_added_test_files/SCANNED_enron_email_shackleton-s_notes_inbox_1449.pdf", scan.getvalue())
 z.close()
 proto = {"matter": "In re Enron Corp. (demo) - first-pass review",
  "issues": [
@@ -80,7 +99,7 @@ proto = {"matter": "In re Enron Corp. (demo) - first-pass review",
   {"id": "RET", "name": "Document retention and destruction", "description": "Documents concerning document-retention policies, litigation holds, instructions to preserve, delete, or destroy documents or email, and Arthur Andersen's handling of Enron records."}],
  "date_range": {"start": "1999-01-01", "end": "2002-06-30"},
  "privilege": {"attorneys": ["Sara Shackleton", "Mark Haedicke", "Elizabeth Sager", "James Derrick", "Richard Sanders", "Jordan Mintz", "Mark Taylor"],
-               "domains": ["velaw.com", "bracepatt.com", "akllp.com", "skadden.com"],
+               "domains": ["velaw.com", "bracepatt.com", "akllp.com", "andrews-kurth.com", "skadden.com"],
                "terms": ["privileged", "attorney-client", "work product", "legal advice", "prepared at the request of counsel"]}}
 (OUT / "protocol.json").write_text(json.dumps(proto, indent=1))
-print(f"wrote {OUT/'enron_demo.zip'} ({(OUT/'enron_demo.zip').stat().st_size/2**20:.1f} MB, {n} emails + mbox + 4 stress files)")
+print(f"wrote {OUT/'enron_demo.zip'} ({(OUT/'enron_demo.zip').stat().st_size/2**20:.1f} MB, {n} emails + mbox + 4 stress files + 1 scanned PDF)")

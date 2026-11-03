@@ -9,6 +9,9 @@ CHILD_TOTAL_CAP = 150_000_000   # bytes we will decompress out of one container 
 CHILD_COUNT_CAP = 5000
 RATIO_CAP = 200                 # per-member compression ratio above which we refuse (zip-bomb signature)
 res = {"status": "ok", "type": None, "meta": {}, "text": "", "text_truncated": False, "children": [], "warnings": []}
+OCR_PAGE_CAP = 20               # OCR at most the first 20 pages of an image-only PDF
+OCR_BUDGET_S = 14               # stop OCR before the 20 s sandbox kill so partial text survives
+T0 = __import__("time").monotonic()
 class Cap(Exception): pass
 def warn(m): res["warnings"].append(m)
 def setText(t):
@@ -25,6 +28,7 @@ def sniff(hint):
         except Exception: pass
         return "zip"
     if head.startswith(b"%PDF"): return "pdf"
+    if head.startswith(b"\x89PNG\r\n") or head.startswith(b"\xff\xd8\xff") or head[:4] in (b"II*\x00", b"MM\x00*"): return "image"
     if head.startswith(b"\xd0\xcf\x11\xe0"): return "msg"
     if head.startswith(b"From ") and hint in ("mbox", ""): return "mbox"
     if hint in ("eml", "msg", "mbox", "pdf", "docx", "xlsx", "csv", "txt", "html", "htm", "zip"): return {"htm": "html"}.get(hint, hint)
@@ -107,7 +111,38 @@ def p_pdf():
     for pg in r.pages:
         t = pg.extract_text() or ""; out.append(t); total += len(t)
         if total > TEXT_CAP: break
+    if total < 40 * max(1, min(len(r.pages), OCR_PAGE_CAP)) * 0.5 and total < 200:   # essentially no text layer: scanned
+        n = min(len(r.pages), OCR_PAGE_CAP); txt = ocr_pdf(n)
+        if len(r.pages) > OCR_PAGE_CAP: warn(f"OCR limited to first {OCR_PAGE_CAP} of {len(r.pages)} pages")
+        if txt.strip(): out = [txt]
     setText("\n\n".join(out))
+def ocr(path):
+    import subprocess
+    left = OCR_BUDGET_S - (__import__("time").monotonic() - T0)
+    if left <= 1: raise TimeoutError
+    p = subprocess.run(["tesseract", path, "stdout", "-l", "eng", "--psm", "3"], capture_output=True, timeout=left)
+    return p.stdout.decode("utf-8", "replace")
+def ocr_pdf(n):
+    import subprocess
+    out, done = [], 0
+    for i in range(1, n + 1):
+        try:
+            left = OCR_BUDGET_S - (__import__("time").monotonic() - T0)
+            if left <= 1: raise TimeoutError
+            subprocess.run(["pdftoppm", "-r", "200", "-gray", "-png", "-singlefile", "-f", str(i), "-l", str(i), IN, "/tmp/pg"], capture_output=True, timeout=left, check=True)
+            out.append(ocr("/tmp/pg.png")); done += 1
+        except (TimeoutError, subprocess.TimeoutExpired):
+            warn(f"OCR time budget ({OCR_BUDGET_S}s) reached after {done} page(s)"); break
+        except subprocess.CalledProcessError as e:
+            warn(f"page {i} could not be rendered for OCR"); continue
+        finally:
+            if os.path.exists("/tmp/pg.png"): os.unlink("/tmp/pg.png")
+    res["meta"].update(ocr=True, ocr_pages=done, ocr_engine="tesseract")
+    return "\n\n".join(out)
+def p_image():
+    res["meta"] = {"ocr": True, "ocr_engine": "tesseract", "ocr_pages": 1}
+    try: setText(ocr(IN))
+    except Exception as e: raise Cap(f"OCR failed or exceeded time budget: {type(e).__name__}")
 def p_docx():
     import docx
     d = docx.Document(IN); cp = d.core_properties
@@ -136,7 +171,7 @@ def main():
     hint = re.sub(r"[^a-z0-9]", "", (sys.argv[1] if len(sys.argv) > 1 else "").lower())[:8]
     t = sniff(hint); res["type"] = t
     try: {"eml": p_eml, "mbox": p_mbox, "msg": p_msg, "zip": p_zip, "pdf": p_pdf, "docx": p_docx, "xlsx": p_xlsx,
-          "csv": p_csv, "txt": p_txt, "html": p_html}[t]()
+          "csv": p_csv, "txt": p_txt, "html": p_html, "image": p_image}[t]()
     except Cap as e: res.update(status="capped", error=str(e))
     except MemoryError: res.update(status="error", error="MemoryError inside parser")
     except Exception as e: res.update(status="error", error=f"{type(e).__name__}: {str(e)[:300]}")

@@ -133,6 +133,7 @@ def run_score(job):
             r = scorer.score(d, protocol); st, err = "scored", None
         except Exception as e:
             r, st, err = {}, "error", str(e)[:300]
+        pre["combined"] = analytics.priv_combined(r.get("priv"), pre["score"])
         db.x("""INSERT OR REPLACE INTO scores(doc_id,status,issues,relevance,priv,priv_basis,priv_reason,hot,rationale,quotes,prescreen,model,tokens_in,tokens_out,seconds,error,attempts,scored)
                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
              (d["id"], st, json.dumps(r.get("issues", {})), r.get("relevance"), r.get("priv"), r.get("priv_basis"), r.get("priv_reason"), int(bool(r.get("hot"))),
@@ -146,6 +147,15 @@ def run_score(job):
     with ThreadPoolExecutor(SCORE_WORKERS) as ex: list(ex.map(one, todo))
     _upd(job["id"], status="done", finished=time.time(), message=f"scored {done[0]-done[1]} of {done[0]}")
     db.audit("score.done", mid, scored=done[0] - done[1], failed=done[1])
+def refresh_prescreen(mid=None):
+    """Re-run the deterministic privilege screen (cheap, no model calls) on scored docs, e.g. after the rules change."""
+    n = 0
+    for m in db.q("SELECT id, protocol FROM matters" + (" WHERE id=?" if mid else ""), (mid,) if mid else ()):
+        proto = json.loads(m["protocol"] or "{}")
+        for d in db.q("SELECT d.*, s.priv mpriv FROM docs d JOIN scores s ON s.doc_id=d.id WHERE d.matter_id=?", (m["id"],)):
+            pre = analytics.prescreen(d, proto); pre["combined"] = analytics.priv_combined(d["mpriv"], pre["score"])
+            db.x("UPDATE scores SET prescreen=? WHERE doc_id=?", (json.dumps(pre), d["id"])); n += 1
+    return n
 def verify_hashes(mid, actor="reviewer"):
     rows = db.q("SELECT id, sha256 FROM docs WHERE matter_id=?", (mid,)); bad = []; cache = {}
     for r in rows:
@@ -170,4 +180,6 @@ def start():
     global _started
     if _started: return
     _started = True; db.conn(); db.x("UPDATE docs SET status='queued' WHERE status='parsing'")
+    try: refresh_prescreen()
+    except Exception: traceback.print_exc()
     threading.Thread(target=worker, daemon=True).start()

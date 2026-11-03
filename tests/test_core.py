@@ -11,8 +11,8 @@ def test_quote_verification():
     assert q[0]["verified"] and d["text"][q[0]["start"]:q[0]["end"]] == "get that language\nto you"
     assert not q[1]["verified"] and q[1]["start"] is None
 def test_prescreen():
-    p = analytics.prescreen({"email_from": "sara.shackleton@enron.com", "text": "This is privileged"}, PROTO)
-    assert p["score"] >= 50 and {h["kind"] for h in p["hits"]} >= {"attorney (header)", "privilege term"}
+    p = analytics.prescreen({"email_from": "sara.shackleton@enron.com", "text": "This is privileged legal advice on the swap."}, PROTO); assert p["score"] >= 50, p
+    assert analytics.prescreen({"email_from": "sara.shackleton@enron.com", "text": "Lunch at noon? This e-mail may contain confidential or privileged information."}, PROTO)["score"] < 50
     assert analytics.prescreen({"text": "lunch?"}, PROTO)["score"] == 0
 def test_near_dup_and_subject():
     a = " ".join(f"word{i}" for i in range(200))
@@ -53,10 +53,12 @@ def test_end_to_end_upload():
         assert "zip-bomb" in reasons["bomb.zip"] and "broken.pdf" in reasons, reasons
         q = c.get(f"/api/matters/{mid}/docs").json()["rows"]
         assert q[0]["subject"] == "California price caps" and q[0]["custodian"] == "lay-k"
-        priv = c.get(f"/api/matters/{mid}/docs?priv=prescreen").json()["rows"]; assert [p["subject"] for p in priv] == ["ISDA"]
+        priv = c.get(f"/api/matters/{mid}/docs?priv=prescreen").json()["rows"]; assert [p["subject"] for p in priv] == ["ISDA"], priv
         assert c.post(f"/api/docs/{q[0]['id']}/code", json={"responsive": 1}).status_code == 200
         cv = c.post(f"/api/matters/{mid}/custody/verify").json(); assert cv["matched"] == cv["checked"] and cv["audit_chain"]["ok"]
-        pl = c.get(f"/api/matters/{mid}/export/privlog.csv").text; assert "ISDA" not in pl and "privileged legal advice" not in pl and "DRAFT" in pl
+        assert c.post(f"/api/docs/{priv[0]['id']}/code", json={"privileged": 1}).status_code == 200
+        pl = c.get(f"/api/matters/{mid}/export/privlog.csv").text; rows = pl.strip().splitlines()
+        assert len(rows) == 2 and "Human-coded" in rows[1] and "ISDA" not in pl and "privileged legal advice" not in pl, pl
         assert "California price caps" in c.get(f"/api/matters/{mid}/export/coding.csv").text
         assert "coding.saved" in c.get(f"/api/matters/{mid}/export/audit.csv").text
         assert c.post(f"/api/matters/{mid}/qc/sample", json={"n": 5, "cutoff": 50}).json()["sampled"] >= 1
@@ -64,3 +66,13 @@ def test_upload_cap(monkeypatch):
     monkeypatch.setattr(main, "MAX_UPLOAD", 1000)
     with TestClient(main.app) as c:
         assert c.post("/api/upload", files=[("files", ("big.txt", b"x" * 5000))]).status_code == 413
+def test_demo_matter_locked_and_resettable():
+    from fastapi.testclient import TestClient
+    from app import main
+    with TestClient(main.app) as c:
+        mid = main.create_matter("Demo", PROTO, demo=True, prefix="DEM")
+        assert c.post(f"/api/matters/{mid}/protocol", json=PROTO).status_code == 403
+        r = c.post("/api/upload", files={"files": ("a.txt", b"hi")}, data={"matter_id": str(mid)}); assert r.status_code == 403
+        assert c.post("/api/demo/load").json() == {"matter_id": mid, "existing": True}
+        assert c.post(f"/api/matters/{mid}/demo/reset").json()["ok"]
+        assert db.one("SELECT event FROM audit ORDER BY id DESC LIMIT 1")["event"] == "demo.reset"
