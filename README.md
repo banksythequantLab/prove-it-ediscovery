@@ -29,7 +29,7 @@ flowchart LR
 **Agent loop (Pattern A):** question → the model writes a plan and code → a fresh sandbox runs it → the stdout result is parsed → on failure, stderr goes back to the model (up to 3 attempts) → quotes are verified → the model explains the result. The UI shows the step log, the code for each attempt, stdout/stderr, retries, and the **Containment Log**.
 
 ### Vultr services used
-- **Vultr Serverless Inference** (`https://api.vultrinference.com/v1/chat/completions`) for all agent LLM calls (code writing, retries, explanations). Key: `VULTR_INFERENCE_API_KEY`; model: `VULTR_MODEL` (default `llama-3.3-70b-instruct-fp8`. Check your account's model list with `GET /v1/models` and set it accordingly).
+- **Vultr Serverless Inference** (`https://api.vultrinference.com/v1/chat/completions`) for all agent LLM calls (code writing, retries, explanations). Key: `VULTR_INFERENCE_API_KEY`; model: `VULTR_MODEL` (default `glm-5.3-flash`. Check your account's model list with `GET /v1/models` and set it accordingly).
 - **Vultr Cloud Compute VM** hosts the app, Caddy, and the Docker sandbox runtime.
 
 ## Containment
@@ -89,3 +89,11 @@ MIT licensed.
 - In scripted mode, the bugs on the first attempt are **planted** (a strptime format bug on the timeline route and a missing chart name on the chart route). They show the retry loop; nothing is being fixed by a real model in this mode.
 - `scripts/smoke_test.sh` checks 7 flows and saves the charts to `shots/sample_*.png`. `scripts/shoot_ui.py` (playwright) saves the UI screenshots to `shots/ui_*.png`.
 - `/?q=...&auto=1` pre-fills a question and runs it automatically.
+
+## Live model notes (Vultr Serverless Inference)
+
+- The default `VULTR_MODEL` is `glm-5.3-flash`. On this corpus it ran all flows at about 3–8 s each, and every run I did reached a passing attempt with verified citations. In the same bench, `qwen3.8-27b`, `minimax-m3.1-flash`, `qwen3.8-flash-next` and `deepseek-v4.1-flash-1017` were slower, made more syntax errors, or used up their output budget on reasoning.
+- The hosted models are reasoning models. If reasoning effort isn't capped, they spend the whole output budget thinking and return no content. The planner sends `reasoning_effort` (`VULTR_REASONING_EFFORT`, default `low`, empty to omit) and `max_tokens` (`VULTR_MAX_TOKENS`, default 6000). An empty reply is reported as a planner error.
+- Citation gate: if a run exits cleanly but any finding's quote isn't a verbatim span of the cited document, the attempt is marked failed. The failed quotes are fed back to the model as stderr so it can retry (up to 3 attempts in total).
+- `pi.parse_date()` is available inside the sandbox. It handles ISO 8601, RFC 2822 and long-form dates.
+- `scripts/live_bench.py URL` runs every flow and prints the attempts, citations verified and latency. `scripts/shoot_live.py` takes a screenshot of one run.

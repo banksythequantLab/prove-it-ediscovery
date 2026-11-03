@@ -10,7 +10,7 @@ mkdir -p /var/lib/prove-it/sbx
 cd /opt/prove-it && git pull
 cat > .env <<ENV
 VULTR_INFERENCE_API_KEY=${VULTR_INFERENCE_API_KEY:?set VULTR_INFERENCE_API_KEY}
-VULTR_MODEL=${VULTR_MODEL:-llama-3.3-70b-instruct-fp8}
+VULTR_MODEL=${VULTR_MODEL:-glm-5.3-flash}
 DOMAIN=${DOMAIN:-:80}
 ENV
 chmod 600 .env

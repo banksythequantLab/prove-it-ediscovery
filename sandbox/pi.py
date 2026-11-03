@@ -17,3 +17,18 @@ def save_chart(fig, name):
     if not name.endswith(".png"): name += ".png"
     fig.savefig(os.path.join(OUT, name), dpi=110, bbox_inches="tight")
     return name
+def parse_date(s):
+    """Best-effort date parser -> naive datetime (tz dropped) or None. Handles ISO 8601 (with/without time/offset),
+    RFC 2822 email dates, and long form like 'January 15, 2026'."""
+    from datetime import datetime
+    from email.utils import parsedate_to_datetime
+    s = (s or "").strip()
+    if not s: return None
+    try: return datetime.fromisoformat(s.replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception: pass
+    try: return parsedate_to_datetime(s).replace(tzinfo=None)
+    except Exception: pass
+    for f in ("%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%m/%d/%Y", "%Y/%m/%d"):
+        try: return datetime.strptime(s, f)
+        except Exception: pass
+    return None

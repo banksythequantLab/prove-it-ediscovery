@@ -71,13 +71,20 @@ def _execute(run, drill):
                 except Exception: pass
         r["stdout"] = "\n".join(l for l in r["stdout"].splitlines() if not l.startswith("@@PI_RESULT@@"))
         ok = r["exit_code"] == 0 and res is not None
+        bad = []
+        if ok:  # citation gate: unverifiable quotes count as a failure and are fed back (only while retries remain)
+            bad = [f for f in verify(res.get("findings") or []) if not f["verified"]]
+            if bad and n < MAX_ATTEMPTS:
+                ok = False; r["stderr"] = (r["stderr"] or "") + "CITATION CHECK FAILED - these findings' quotes are not verbatim spans of the cited document's text/subject:\n" + \
+                    "\n".join(f"  {f.get('doc_id')}: {(f.get('quote') or '')[:120]!r}" for f in bad[:15]) + \
+                    "\nCopy quotes exactly (one short line) from d['text'] or d['subject'], or drop findings that have no quote."
         att.update(**r, ok=ok, status="passed" if ok else "failed")
         log(f"Attempt {n}: exit {r['exit_code']} in {r['seconds']}s; {len(r['charts'])} chart(s); sandbox destroyed: {r['destroyed']}")
         CONTAINMENT.append({"run_id": run["id"], "attempt": n, "ts": time.strftime("%H:%M:%S"), "runner": r["runner"], "limits": r["limits"],
                             "exit_code": r["exit_code"], "blocked": r["blocked"], "code_attempts": r["code_attempts"], "destroyed": r["destroyed"]})
         if r["blocked"]: log(f"Attempt {n}: CONTAINMENT - blocked: " + "; ".join(f"{b['kind']} ({b['evidence']})" for b in r["blocked"]))
         if ok: result = res; result["charts"] = [c["name"] for c in r["charts"]]; break
-        history.append({"code": code, "exit_code": r["exit_code"], "stderr": r["stderr"] or "no @@PI_RESULT@@ emitted"})
+        history.append({"code": code, "exit_code": r["exit_code"], "stderr": r["stderr"] or "no @@PI_RESULT@@ emitted (call pi.emit exactly once)"})
         log(f"Attempt {n}: failed; feeding stderr back to planner for retry")
         if n > 1 and history[-1]["code"] == history[-2]["code"]: log("Planner produced identical code; stopping retries"); break
     explanation = ""

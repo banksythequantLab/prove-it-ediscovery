@@ -10,7 +10,8 @@ LIMITS = {"timeout_s": int(os.getenv("SANDBOX_TIMEOUT", 20)), "memory_mb": int(o
 BLOCK_SIGNS = [("network", r"Network is unreachable|Temporary failure in name resolution|Name or service not known|nodename nor servname|Errno -[23]|Errno 101"),
                ("filesystem-write", r"Read-only file system|Errno 30"),
                ("permission", r"Permission denied|Operation not permitted"),
-               ("memory", r"MemoryError|Cannot allocate memory"),]
+               ("memory", r"MemoryError|Cannot allocate memory"),
+               ("process-limit", r"Resource temporarily unavailable|Errno 11"),]
 CODE_SIGNS = [("network attempt", r"\burllib|\brequests\b|\bsocket\b|http\.client|httpx"),
               ("env/secret read", r"os\.environ|getenv|/proc/self/environ"),
               ("file deletion/write to corpus", r"os\.remove|unlink|shutil\.rmtree|open\([^)]*corpus[^)]*['\"][wa]"),
@@ -30,6 +31,8 @@ def _prepare(code, corpus_dir):
     return work
 def _analyze(code, out, err, rc, timed_out):
     blocked = [{"kind": k, "evidence": re.search(rx, out+err).group(0)} for k, rx in BLOCK_SIGNS if re.search(rx, out+err)]
+    if rc in (137, -9) and not timed_out and not any(b["kind"] == "memory" for b in blocked):
+        blocked.append({"kind": "memory", "evidence": f"OOM-killed at {LIMITS['memory_mb']}MB cap (exit {rc})"})
     if timed_out: blocked.append({"kind": "timeout", "evidence": f"killed after {LIMITS['timeout_s']}s"})
     attempts = [{"kind": k, "evidence": re.search(rx, code).group(0)} for k, rx in CODE_SIGNS if re.search(rx, code)]
     return blocked, attempts
@@ -57,7 +60,7 @@ class LocalNamespaceSandbox:
                  "for d in /home /workspace /root /etc/ssh; do [ -d $d ] && mount -t tmpfs -o ro,size=1k none $d 2>/dev/null; done; "
                  f"cd {work} && exec prlimit --as={mem} --cpu={LIMITS['timeout_s']} --fsize=10485760 --nofile=64 /usr/bin/python3 -E -s _boot.py")
         cmd = ["env","-i","PATH=/usr/bin:/bin","HOME=/tmp","LANG=C.UTF-8","unshare","-r","-n","-m","-p","--fork","--mount-proc","sh","-c",inner]
-        return _exec(cmd, code, work, {"runner": "local-namespace", "out_dir": outh, "container": None, "command": "env -i … unshare -rnmp --fork … prlimit … python3 -E -s main.py", "limit_overrides": {"pids": "not enforced (local)", "cpus": "cpu-time rlimit only"}})
+        return _exec(cmd, code, work, {"runner": "local-namespace", "out_dir": outh, "container": None, "command": "env -i … unshare -rnmp --fork … prlimit … python3 -E -s _boot.py (runs main.py)", "limit_overrides": {"pids": "not enforced (local)", "cpus": "cpu-time rlimit only"}})
 def _exec(cmd, code, work, meta, on_timeout=None):
     t0 = time.time(); timed_out = False
     try:
