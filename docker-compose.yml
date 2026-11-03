@@ -10,10 +10,19 @@ services:
       - VULTR_INFERENCE_API_KEY=${VULTR_INFERENCE_API_KEY}
       - VULTR_MODEL=${VULTR_MODEL:-glm-5.3-flash}
       - TMPDIR=/var/lib/prove-it/sbx      # same path on host + container so sandbox bind mounts resolve
+      - SANDBOX_RUNNER_URL=http://runner:9000
+    volumes:
+      - /var/lib/prove-it/sbx:/var/lib/prove-it/sbx   # job dirs only; NO docker socket in the internet-facing app
+    expose: ["8000"]
+    networks: [web, internal]
+    depends_on: [runner]
+  runner:                   # only service with the docker socket; internal network, no published port, no secrets
+    build: ./runner
+    restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/prove-it/sbx:/var/lib/prove-it/sbx
-    expose: ["8000"]
+    networks: [internal]
   caddy:
     image: caddy:2
     restart: unless-stopped
@@ -23,4 +32,8 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
+    networks: [web]
 volumes: { caddy_data: {} }
+networks:
+  web: {}
+  internal: { internal: true }

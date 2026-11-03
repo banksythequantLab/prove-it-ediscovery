@@ -84,5 +84,31 @@ def _collect(d, max_n=6, max_bytes=2_000_000):
         if len(b) <= max_bytes and b[:8] == b"\x89PNG\r\n\x1a\n": out.append({"name": p.name, "png_b64": base64.b64encode(b).decode()})
     if str(d).startswith(tempfile.gettempdir()) and "pi-out-" in str(d): shutil.rmtree(d, ignore_errors=True)
     return out
+class RunnerSandbox:
+    """Production path: asks the separate sandbox-runner service (which alone holds the Docker socket) to run a job.
+    The app sends only the job directory name; the runner fixes every isolation flag."""
+    name = "docker"
+    url = os.getenv("SANDBOX_RUNNER_URL", "")
+    def run(self, code, corpus_dir):
+        import json, urllib.request
+        work = _prepare(code, corpus_dir); t0 = time.time()
+        try:
+            req = urllib.request.Request(self.url.rstrip("/") + "/run", data=json.dumps({"job": work.name}).encode(),
+                                         headers={"content-type": "application/json"})
+            r = json.load(urllib.request.urlopen(req, timeout=LIMITS["timeout_s"] + 30))
+            out, err, rc, timed_out = r["stdout"], r["stderr"], r["exit_code"], r["timed_out"]
+            meta = {"runner": "docker (via sandbox-runner)", "container": r["container"], "command": r["command"]}
+        finally:
+            charts = _collect(work/"out")
+            subprocess.run(["chmod","-R","u+w",str(work)]); shutil.rmtree(work, ignore_errors=True)
+        blocked, attempts = _analyze(code, out, err, rc, timed_out)
+        return Run(meta, exit_code=rc, stdout=out, stderr=err, seconds=round(time.time()-t0,2), limits=LIMITS,
+                   blocked=blocked, code_attempts=attempts, charts=charts, destroyed=not work.exists())
+def runner_available():
+    if not RunnerSandbox.url: return False
+    try:
+        import urllib.request; return urllib.request.urlopen(RunnerSandbox.url.rstrip("/") + "/health", timeout=3).status == 200
+    except Exception: return False
 def get_sandbox():
+    if runner_available(): return RunnerSandbox()
     return DockerSandbox() if docker_available() else LocalNamespaceSandbox()

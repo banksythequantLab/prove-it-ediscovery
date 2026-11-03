@@ -5,6 +5,8 @@
 The agent writes Python, runs it in a throwaway sandbox with no network and no secrets, and returns real output:
 tables, a timeline, a privilege-log CSV. Every finding cites a doc ID and an exact quote, and the host checks each quote against the source document before showing it.
 
+**Live demo:** https://207-246-93-241.sslip.io (Vultr Cloud Compute, ewr)
+
 Built for the **Vultr Agent Rush hackathon (lablab.ai, Nov 3–8 2026), Challenge 1: Blast Radius Zero**.
 
 ## Why it matters (business value)
@@ -18,14 +20,18 @@ Firms won't put client data into a chatbot that can leak it, and they won't rely
 ## Architecture
 ```mermaid
 flowchart LR
-  U[Reviewer browser] -->|HTTPS| C[Caddy on Vultr VM]
-  C --> A[FastAPI app<br/>agent loop + citation verifier]
+  U[Reviewer browser] -->|HTTPS| C[Caddy<br/>auto TLS]
+  subgraph VM[Vultr Cloud Compute VM - orchestrator]
+    C --> A[FastAPI app<br/>agent loop + citation verifier<br/>holds inference key, NO docker socket]
+    A -->|POST /run job-dir name only<br/>internal network| R[sandbox-runner<br/>only holder of docker.sock<br/>fixed hardened flags, no secrets]
+    R -->|docker run --rm --network none --read-only<br/>512m, 1 cpu, pids 64, uid 10001,<br/>cap-drop ALL, no-new-privileges, empty env| S[(Ephemeral sandbox container)]
+    N[(Normalized corpus copy)] -->|read-only bind mount| S
+    S -->|stdout/stderr + charts| A
+  end
   A -->|chat/completions| V[Vultr Serverless Inference<br/>OpenAI-compatible]
-  A -->|docker run --network none --read-only<br/>--memory --cpus --pids-limit, non-root, no env| S[(Ephemeral sandbox container)]
-  S -->|stdout/stderr + @@PI_RESULT@@ JSON| A
-  A -->|ingest: eml/txt/pdf/docx/csv -> docs.jsonl| N[(Normalized corpus copy)]
-  N -->|read-only bind mount| S
 ```
+**Trust boundaries:** the internet-facing app can only ask the runner to run a job directory by name (validated `pi-sbx-*` under the shared job root). It can't pass flags, images, or mounts. The runner sits on an internal-only Docker network with no published port, and it never sees the inference key. Sandboxes see neither the key nor the network.
+
 **Agent loop (Pattern A):** question → the model writes a plan and code → a fresh sandbox runs it → the stdout result is parsed → on failure, stderr goes back to the model (up to 3 attempts) → quotes are verified → the model explains the result. The UI shows the step log, the code for each attempt, stdout/stderr, retries, and the **Containment Log**.
 
 ### Vultr services used
@@ -71,12 +77,15 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 2. SSH in, then run `export VULTR_INFERENCE_API_KEY=... DOMAIN=proveit.example.com REPO=https://github.com/<you>/prove-it.git` and `bash scripts/deploy_vultr.sh`.
 3. `docker compose` builds the sandbox image and the app, and starts Caddy (automatic HTTPS when `DOMAIN` is set).
 
-Note: the app container mounts `/var/run/docker.sock` so it can start sandbox containers, which makes the app container itself host-privileged. The sandboxes are not. For stronger separation, run the app directly on the VM with systemd, or use a rootless Docker / gVisor (`--runtime runsc`) runtime.
+The app container has no Docker socket. Only `sandbox-runner` mounts it, and that service is unreachable from the internet and runs a fixed `docker run` command.
 
-## Limits and known gaps
-- Privilege, timeline, and near-dup logic in scripted mode is heuristic and tuned to the demo corpus. A real model writes its own code.
-- PDF extraction is text-only (no OCR). There is no auth or multi-tenant separation, and run state lives in memory.
-- An LLM may refuse to follow the injection. That's why the drill exists: it shows the sandbox holds even when the model doesn't.
+## Known limitations
+- **The drill hijack is scripted.** The "Containment drill" button simulates a model that obeyed the prompt injection in DOC-033, because real models often refuse to. What it demonstrates is real (the sandbox blocks network, secret, and corpus-write attempts on real Docker); the "hijacked" code itself is canned.
+- **Back-dating detection varies.** The live model writes new code on each run, so the back-dated-document findings can differ between runs (sometimes 0 flagged).
+- **No auth.** Anyone with the URL can use the demo and upload files. It's a single-tenant demo with no user separation.
+- **In-memory history.** Runs and the Containment Log are held in process memory and are lost on restart.
+- **Docker-socket holder.** `sandbox-runner` is still root-equivalent on the host. It is isolated (internal network, fixed command), but gVisor (`--runtime runsc`) or rootless Docker would be stronger.
+- PDF extraction is text-only (no OCR). Privilege/near-dup heuristics in scripted mode are tuned to the demo corpus.
 
 MIT licensed.
 

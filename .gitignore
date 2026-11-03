@@ -3,3 +3,6 @@ data/
 __pycache__/
 .env
 sandbox_env/
+*.pem
+id_*
+.env.*
